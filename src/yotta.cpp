@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <experimental/string_view>
-#include <iostream>
 #include <unordered_map>
 #include <vector>
 
@@ -19,23 +18,28 @@
 
 #include <unistd.h>
 
-#include <http_parser.h>
-
 #include "core/yta_event_loop.h"
 #include "http/yta_http.hpp"
 
+#include "picohttpparser/picohttpparser.h"
+
+const std::size_t MAX_HEADERS = 20;
+
 typedef unsigned char byte;
 
-struct line {
-    char* field;
-    size_t field_len;
-    char* value;
-    size_t value_len;
+struct pico_parser {
+    const char* method = nullptr;
+    std::size_t method_len = 0;
+    const char* path = nullptr;
+    std::size_t path_len = 0;
+    int pret = 0;
+    int minor_version = 0;
+    struct phr_header headers[20];
+    std::size_t num_headers = MAX_HEADERS;
 };
 
 struct user_data {
-    int counter;
-    int unparsed;
+    std::size_t counter;
 
     char buf[512];
     char response_buf[512];
@@ -49,15 +53,9 @@ struct user_data {
     int file_size;
     int offset = 0;
 
-    http_parser parser;
-    http_parser_settings parser_settings;
+    pico_parser parser;
 
     struct stat file_stat;
-
-    // header parsing logic taken from https://gist.github.com/ry/155877 for now
-    struct line header[20];
-    int nlines = 0;
-    int last_was_value = 1;
 };
 
 void return_400(user_data* udata) {
@@ -74,60 +72,8 @@ void return_404(user_data* udata) {
     udata->finalized = true;
 }
 
-int parser_header_field_callback(http_parser* parser, const char* at, size_t len) {
-    yta_ctx* ctx = static_cast<yta_ctx*>(parser->data);
+int parse_url(yta_ctx* ctx, const char* at, size_t length) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
-
-    if (udata->last_was_value) {
-        if (udata->nlines >= 20) {
-            return 0;
-        }; // error!
-
-        udata->nlines++;
-
-
-        udata->header[udata->nlines - 1].value = NULL;
-        udata->header[udata->nlines - 1].value_len = 0;
-
-        udata->header[udata->nlines - 1].field_len = len;
-        udata->header[udata->nlines - 1].field = (char*)at;
-
-    } else {
-        udata->header[udata->nlines - 1].field_len += len;
-    }
-
-    udata->header[udata->nlines - 1].field[udata->header[udata->nlines - 1].field_len] =
-        '\0';
-    udata->last_was_value = 0;
-
-    return 0;
-}
-
-int parser_value_field_callback(http_parser* parser, const char* at, size_t len) {
-    struct yta_ctx* ctx = static_cast<yta_ctx*>(parser->data);
-    struct user_data* udata = static_cast<user_data*>(ctx->user_data);
-
-    if (!udata->last_was_value) {
-        if (udata->nlines >= 20) {
-            return 0;
-        }
-
-        udata->header[udata->nlines - 1].value_len = len;
-        udata->header[udata->nlines - 1].value = (char*)at;
-    } else {
-        udata->header[udata->nlines - 1].value_len += len;
-    }
-
-    udata->header[udata->nlines - 1].value[udata->header[udata->nlines - 1].value_len] =
-        '\0';
-    udata->last_was_value = 1;
-
-    return 0;
-}
-
-int parser_url_callback(http_parser* parser, const char* at, size_t length) {
-    struct yta_ctx* ctx = static_cast<yta_ctx*>(parser->data);
-    struct user_data* udata = static_cast<user_data*>(ctx->user_data);
 
     *const_cast<char*>(at + length) = '\0'; // UB
 
@@ -154,9 +100,9 @@ int parser_url_callback(http_parser* parser, const char* at, size_t length) {
     return 0;
 }
 
-typedef bool (*header_handler)(yta_ctx*, char*, std::size_t);
+typedef bool (*header_handler)(yta_ctx*, const char*, std::size_t);
 
-bool handle_if_modified_since(yta_ctx* ctx, char* value, std::size_t) {
+bool handle_if_modified_since(yta_ctx* ctx, const char* value, std::size_t) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
     tm stamp;
@@ -181,7 +127,7 @@ bool handle_if_modified_since(yta_ctx* ctx, char* value, std::size_t) {
     return false;
 }
 
-bool handle_range(yta_ctx* ctx, char* value, std::size_t value_length) {
+bool handle_range(yta_ctx* ctx, const char* value, std::size_t value_length) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
     // 7 bytes=X-
@@ -210,7 +156,7 @@ bool handle_range(yta_ctx* ctx, char* value, std::size_t value_length) {
         return true;
     }
 
-    *sep = 0;
+    *const_cast<char*>(sep) = 0; // UB
     int start_value = std::atoi(value);
     int end_value = 0;
 
@@ -249,17 +195,16 @@ std::unordered_map<std::experimental::string_view, header_handler> header_callba
     { "If-Modified-Since", handle_if_modified_since }, { "Range", handle_range }
 };
 
-int parser_complete_callback(http_parser* parser) {
-    yta_ctx* ctx = static_cast<yta_ctx*>(parser->data);
+int parse_headers(yta_ctx* ctx) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
-    for (int i = 0; (i < udata->nlines) && !udata->finalized; ++i) {
-        std::experimental::string_view header(udata->header[i].field,
-                                              udata->header[i].field_len);
+    for (std::size_t i = 0; (i < udata->parser.num_headers) && !udata->finalized; ++i) {
+        std::experimental::string_view header(udata->parser.headers[i].name,
+                                              udata->parser.headers[i].name_len);
         auto it = header_callbacks.find(header);
         if (it != header_callbacks.end()) {
-            auto done =
-                it->second(ctx, udata->header[i].value, udata->header[i].value_len);
+            auto done = it->second(ctx, udata->parser.headers[i].value,
+                                   udata->parser.headers[i].value_len);
             if (done) {
                 return 0;
             }
@@ -279,8 +224,6 @@ int parser_complete_callback(http_parser* parser) {
 void accept_logic(struct yta_ctx* ctx, struct user_data* udata);
 
 void http_finish_callback(struct yta_ctx* ctx, void*, size_t) {
-    // struct user_data* udata = (struct user_data*)ctx->user_data;
-    // yta_async_read(ctx, printer, udata->buf, 512);
     struct user_data* udata = (struct user_data*)ctx->user_data;
 
     if (udata->file_fd != 0) {
@@ -288,14 +231,11 @@ void http_finish_callback(struct yta_ctx* ctx, void*, size_t) {
         udata->file_fd = 0;
     }
 
-    // delete udata;
-    // yta_close_context(ctx);
-
     accept_logic(ctx, udata);
 }
 
-void write_header_callback(struct yta_ctx* ctx, void*, size_t) {
-    struct user_data* udata = (struct user_data*)ctx->user_data;
+void write_header_callback(yta_ctx* ctx, void*, size_t) {
+    user_data* udata = static_cast<user_data*>(ctx->user_data);
     if (udata->content) {
         yta_async_sendfile(ctx, http_finish_callback, udata->file_fd, udata->file_size,
                            udata->offset);
@@ -304,22 +244,36 @@ void write_header_callback(struct yta_ctx* ctx, void*, size_t) {
     }
 }
 
-void read_callback_http(struct yta_ctx* ctx, void* buf, size_t read) {
-    struct user_data* udata = (struct user_data*)ctx->user_data;
+void read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
+    user_data* udata = static_cast<user_data*>(ctx->user_data);
 
+    std::size_t prev_count = udata->counter;
     udata->counter += read;
 
-    int parsed = http_parser_execute(&udata->parser, &udata->parser_settings,
-                                     (char*)buf - udata->unparsed, read);
+    int parsed = phr_parse_request(
+        udata->buf, udata->counter, &udata->parser.method, &udata->parser.method_len,
+        &udata->parser.path, &udata->parser.path_len, &udata->parser.minor_version,
+        udata->parser.headers, &udata->parser.num_headers, prev_count);
 
-    udata->unparsed = read + udata->unparsed - parsed;
+    if (parsed == -1) {
+        return_400(udata);
+    } else if (parsed > 0) {
+        parse_url(ctx, udata->parser.path, udata->parser.path_len);
+        parse_headers(ctx);
+    }
 
     if (udata->finalized) {
         yta_async_write(ctx, write_header_callback, udata->response_buf,
                         udata->response_size);
-    } else {
-        yta_async_read(ctx, read_callback_http, (byte*)buf + read, 512 - udata->counter);
+        return;
     }
+
+    if (udata->counter == 512) {
+        http_finish_callback(ctx, NULL, 0);
+        return;
+    }
+
+    yta_async_read(ctx, read_callback_http, (byte*)buf + read, 512 - udata->counter);
 }
 
 void http_cleanup(struct yta_ctx* ctx) {
@@ -334,20 +288,10 @@ void http_cleanup(struct yta_ctx* ctx) {
 }
 
 void accept_logic(struct yta_ctx* ctx, struct user_data* udata) {
-    http_parser_init(&udata->parser, HTTP_REQUEST); /* initialise parser */
-    udata->parser.data = ctx;
-    http_parser_settings_init(&udata->parser_settings);
-    udata->parser_settings.on_url = parser_url_callback;
-    udata->parser_settings.on_message_complete = parser_complete_callback;
-    udata->parser_settings.on_header_field = parser_header_field_callback;
-    udata->parser_settings.on_header_value = parser_value_field_callback;
-
+    udata->parser = pico_parser{};
     udata->counter = 0;
-    udata->unparsed = 0;
     udata->finalized = false;
     udata->file_fd = 0;
-    udata->nlines = 0;
-    udata->last_was_value = 1;
     yta_async_read(ctx, read_callback_http, udata->buf, 512);
 }
 
