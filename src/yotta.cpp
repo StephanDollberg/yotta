@@ -34,7 +34,7 @@ struct pico_parser {
     std::size_t path_len = 0;
     int pret = 0;
     int minor_version = 0;
-    struct phr_header headers[20];
+    struct phr_header headers[MAX_HEADERS];
     std::size_t num_headers = MAX_HEADERS;
 };
 
