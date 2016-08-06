@@ -100,5 +100,67 @@ char* serve_404(char* buf) {
                           "keep-alive\r\nContent-Length: 0\r\n\r\n";
     return std::copy(result, result + sizeof(result) - 1, buf);
 }
+
+// translated from Go source
+// Cleans path from .. etc; returns new path size
+std::size_t clean_path(char* path, std::size_t length) {
+    char temp_buf[512];
+    char* output = temp_buf;
+
+    if (length == 0) {
+        *path = '.';
+        return 1;
+    }
+
+    std::size_t r = 0;
+    std::size_t dotdot = 0;
+
+    bool rooted = path[0] == '/';
+    if (rooted) {
+        *output++ = '/';
+        r = 1;
+        dotdot = 1;
+    }
+
+    while (r < length) {
+        if (path[r] == '/') {
+            ++r;
+        } else if (path[r] == '.' && (r+1 == length || path[r+1] == '/')) {
+            ++r;
+        } else if (path[r] == '.' && path[r+1] == '.' && (r+2 == length || path[r+2] == '/')) {
+            r += 2;
+
+            if (std::size_t(output - temp_buf) > dotdot) {
+                --output;
+                while (std::size_t(output - temp_buf) > dotdot && *output != '/') {
+                    --output;
+                }
+            } else if(!rooted) {
+                if (output - &temp_buf[0] > 0) {
+                    *output++ = '/';
+                    *output++ = '.';
+                    *output++ = '.';
+                    dotdot = output - &temp_buf[0];
+                }
+            }
+        } else {
+            if ((rooted && (std::size_t(output - temp_buf) != 1)) || (!rooted && (output - temp_buf != 0))) {
+                *output++ = '/';
+            }
+
+            for(; r < length && path[r] != '/'; ++r) {
+                *output++ = path[r];
+            }
+        }
+    }
+
+    if (output - temp_buf == 0) {
+        *output++ = '.';
+    }
+
+    std::copy(&temp_buf[0], output, path);
+    return output - &temp_buf[0];
+}
+
 }
 }

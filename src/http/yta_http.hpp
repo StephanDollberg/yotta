@@ -2,6 +2,7 @@
 #define YOTTA_HTTP_HPP
 
 #include <time.h>
+#include <cstddef>
 
 namespace yta {
 namespace http {
@@ -16,6 +17,8 @@ char* serve_304(char* buf);
 char* serve_400(char* buf);
 
 char* serve_404(char* buf);
+
+std::size_t clean_path(char* buf, std::size_t length);
 
 constexpr const char* http_time_format() {
     return "%a, %d %b %Y %H:%M:%S %Z";

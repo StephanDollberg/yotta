@@ -75,9 +75,12 @@ void return_404(user_data* udata) {
 int parse_url(yta_ctx* ctx, const char* at, size_t length) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
-    *const_cast<char*>(at + length) = '\0'; // UB
+    char* path = const_cast<char*>(at); // UB
+    auto new_length = yta::http::clean_path(path, length);
+    path[new_length] = '\0';
+    *(--path) = '.';
 
-    int ffd = open(at + 1, O_RDONLY);
+    int ffd = open(path, O_RDONLY);
 
     if (ffd == -1) {
         return_404(udata);
@@ -87,7 +90,7 @@ int parse_url(yta_ctx* ctx, const char* at, size_t length) {
     struct stat file_stat;
     int status = fstat(ffd, &file_stat);
 
-    if (status != 0) {
+    if (status != 0 || !S_ISREG(file_stat.st_mode)) {
         return_404(udata);
         close(ffd);
         return 0;
