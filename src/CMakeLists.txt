@@ -5,9 +5,9 @@ set (CMAKE_CXX_FLAGS "--std=c++17 -Wall -Werror -Wextra -pedantic -g -O3 -fsanit
 
 add_subdirectory(core)
 add_subdirectory(http)
-add_executable(yotta yotta.cpp)
+add_executable(yotta yotta.cpp picohttpparser/picohttpparser.c)
 
-target_link_libraries(yotta http_parser core http)
+target_link_libraries(yotta core http)
 
 enable_testing()
 
