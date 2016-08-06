@@ -8,4 +8,4 @@ add_library(core yta_event_loop.c yta_process.c)
 enable_testing()
 add_subdirectory(test)
 
-add_test(NAME core_test COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/test/core_test.sh)
+#add_test(NAME core_test COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/test/core_test.sh)

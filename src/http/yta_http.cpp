@@ -115,7 +115,7 @@ std::size_t clean_path(char* path, std::size_t length) {
     std::size_t r = 0;
     std::size_t dotdot = 0;
 
-    bool rooted = path[0] == '/';
+    bool rooted = (path[0] == '/');
     if (rooted) {
         *output++ = '/';
         r = 1;
@@ -136,12 +136,12 @@ std::size_t clean_path(char* path, std::size_t length) {
                     --output;
                 }
             } else if(!rooted) {
-                if (output - &temp_buf[0] > 0) {
+                if (output - temp_buf > 0) {
                     *output++ = '/';
-                    *output++ = '.';
-                    *output++ = '.';
-                    dotdot = output - &temp_buf[0];
                 }
+                *output++ = '.';
+                *output++ = '.';
+                dotdot = output - &temp_buf[0];
             }
         } else {
             if ((rooted && (std::size_t(output - temp_buf) != 1)) || (!rooted && (output - temp_buf != 0))) {
