@@ -12,11 +12,13 @@
 #include <sys/prctl.h>
 #include <sys/sendfile.h>
 #include <sys/socket.h>
+#include <sys/timerfd.h>
 #include <netinet/tcp.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/unistd.h>
+
 
 #include <netdb.h>
 #include <arpa/inet.h>
@@ -30,7 +32,9 @@ typedef unsigned char byte;
 
 struct loop_core {
     int listen_fd;
-    int epoll_fd;
+    int socket_epoll_fd;
+    int master_epoll_fd;
+    int timer_epoll_fd;
 };
 
 static int create_and_bind(char* addr, char* port) {
@@ -98,6 +102,10 @@ static void make_socket_non_blocking(int listen_fd) {
 static void cleanup_context(struct yta_ctx* ctx) {
     close(ctx->fd);
 
+    if (ctx->timer_fd != 0) {
+        close(ctx->timer_fd);
+    }
+
     if (ctx->close_callback) {
         ctx->close_callback(ctx);
     }
@@ -118,21 +126,53 @@ static struct loop_core create_reactor(char* addr, char* port) {
         exit(1);
     }
 
-    reactor.epoll_fd = epoll_create1(0);
-    if (reactor.epoll_fd == -1) {
+    reactor.socket_epoll_fd = epoll_create1(0);
+    if (reactor.socket_epoll_fd == -1) {
         perror("error creating epoll fd");
         exit(1);
     }
 
-    struct epoll_event event;
-    event.events = EPOLLIN | EPOLLET;
+    struct epoll_event listen_event;
+    listen_event.events = EPOLLIN | EPOLLET;
     struct yta_ctx* ctx = (struct yta_ctx*)calloc(1, sizeof(struct yta_ctx));
-    event.data.ptr = ctx;
+    listen_event.data.ptr = ctx;
     ctx->fd = reactor.listen_fd;
     status =
-        epoll_ctl(reactor.epoll_fd, EPOLL_CTL_ADD, reactor.listen_fd, &event);
+        epoll_ctl(reactor.socket_epoll_fd, EPOLL_CTL_ADD, reactor.listen_fd, &listen_event);
     if (status == -1) {
         perror("error adding listen_fd to epoll set");
+        exit(1);
+    }
+
+    reactor.timer_epoll_fd = epoll_create1(0);
+    if (reactor.timer_epoll_fd == -1) {
+        perror("error creating timer epoll fd");
+        exit(1);
+    }
+
+    reactor.master_epoll_fd = epoll_create1(0);
+    if (reactor.master_epoll_fd == -1) {
+        perror("error creating master epoll fd");
+        exit(1);
+    }
+
+    struct epoll_event socket_event;
+    socket_event.data.fd = reactor.socket_epoll_fd;
+    socket_event.events = EPOLLIN | EPOLLET;
+    status =
+        epoll_ctl(reactor.master_epoll_fd, EPOLL_CTL_ADD, reactor.socket_epoll_fd, &socket_event);
+    if (status == -1) {
+        perror("error adding socket epoll fd to epoll set");
+        exit(1);
+    }
+
+    struct epoll_event timer_event;
+    timer_event.data.fd = reactor.timer_epoll_fd;
+    timer_event.events = EPOLLIN | EPOLLET;
+    status =
+        epoll_ctl(reactor.master_epoll_fd, EPOLL_CTL_ADD, reactor.timer_epoll_fd, &timer_event);
+    if (status == -1) {
+        perror("error adding timer epoll fd to epoll set");
         exit(1);
     }
 
@@ -141,7 +181,7 @@ static struct loop_core create_reactor(char* addr, char* port) {
 
 static inline void
 deepreact_accept_loop(struct loop_core* reactor,
-                      void (*accept_callback)(struct yta_ctx*),
+                      yta_callback accept_callback,
                       pid_t worker_pid) {
     while (1) {
         struct sockaddr in_addr;
@@ -179,11 +219,12 @@ deepreact_accept_loop(struct loop_core* reactor,
 
         struct yta_ctx* udata = (struct yta_ctx*)calloc(1, sizeof(struct yta_ctx));
         udata->fd = infd;
+        udata->reactor = reactor;
 
         struct epoll_event event;
         event.data.ptr = udata;
         event.events = EPOLLIN | EPOLLOUT | EPOLLET;
-        status = epoll_ctl(reactor->epoll_fd, EPOLL_CTL_ADD, infd, &event);
+        status = epoll_ctl(reactor->socket_epoll_fd, EPOLL_CTL_ADD, infd, &event);
         if (status == -1) {
             perror("epoll_ctl");
             exit(1);
@@ -207,9 +248,11 @@ static inline int deepreact_read_loop(struct yta_ctx* udata) {
             return 1;
         }
 
-        yta_callback read_callback = udata->read_callback;
+        yta_io_callback read_callback = udata->read_callback;
         udata->read_callback = NULL;
-        read_callback(udata, udata->read_buf, count);
+        if (read_callback(udata, udata->read_buf, count) != YTA_OK) {
+            return 1;
+        }
     }
 
     return 0;
@@ -232,10 +275,12 @@ static inline int deepreact_write_handle_basic(struct yta_ctx* udata) {
     udata->already_written += count;
 
     if (udata->already_written == udata->to_write) {
-        yta_callback write_callback = udata->write_callback;
+        yta_io_callback write_callback = udata->write_callback;
         udata->write_callback = NULL;
-        write_callback(udata, udata->wdata.basic_data.write_buf,
-                       udata->already_written);
+        if(write_callback(udata, udata->wdata.basic_data.write_buf,
+                       udata->already_written) != YTA_OK) {
+            return 1;
+        }
     }
 
     return 0;
@@ -259,9 +304,11 @@ static inline int deepreact_write_handle_sendfile(struct yta_ctx* udata) {
 
     udata->already_written += count;
     if (udata->already_written == udata->to_write) {
-        yta_callback write_callback = udata->write_callback;
+        yta_io_callback write_callback = udata->write_callback;
         udata->write_callback = NULL;
-        write_callback(udata, NULL, udata->already_written);
+        if(write_callback(udata, NULL, udata->already_written) != YTA_OK) {
+            return 1;
+        }
     }
 
     return 0;
@@ -279,9 +326,83 @@ static inline int deepreact_write_loop(struct yta_ctx* udata) {
 
     return done == -1 ? 0 : done;
 }
+static inline void serve_timers(struct loop_core* reactor, struct epoll_event* events, const int MAX_EVENT_COUNT) {
+    int event_count =
+        epoll_wait(reactor->timer_epoll_fd, events, MAX_EVENT_COUNT, -1);
+
+    for (int i = 0; i < event_count; i++) {
+        struct yta_ctx* ctx = (struct yta_ctx*)events[i].data.ptr;
+
+        if (((events[i].events & EPOLLERR) ||
+             (events[i].events & EPOLLRDHUP)) &&
+            (!(events[i].events & EPOLLIN ||
+               events[i].events & EPOLLOUT))) {
+
+            if (events[i].events & EPOLLHUP) {
+                printf("Client disconnected\n");
+            } else {
+                fprintf(stderr, "epoll error\n");
+                fprintf(stderr, "error: %s\n", strerror(errno));
+            }
+
+            cleanup_context(ctx);
+        } else {
+            if (events[i].events & EPOLLIN) {
+                if(ctx->timer_callback(ctx) != YTA_OK) {
+                    cleanup_context(ctx);
+                }
+            } else {
+                assert(0);
+            }
+        }
+    }
+}
+
+static inline void serve_sockets(struct loop_core* reactor, struct epoll_event* events, const int MAX_EVENT_COUNT, yta_callback accept_callback) {
+    int event_count =
+        epoll_wait(reactor->socket_epoll_fd, events, MAX_EVENT_COUNT, -1);
+
+    for (int i = 0; i < event_count; i++) {
+        struct yta_ctx* udata = (struct yta_ctx*)events[i].data.ptr;
+
+        if (((events[i].events & EPOLLERR) ||
+             (events[i].events & EPOLLRDHUP)) &&
+            (!(events[i].events & EPOLLIN ||
+               events[i].events & EPOLLOUT))) {
+
+            if (events[i].events & EPOLLHUP) {
+                printf("Client disconnected\n");
+            } else {
+                fprintf(stderr, "epoll error\n");
+                fprintf(stderr, "error: %s\n", strerror(errno));
+            }
+
+            cleanup_context(udata);
+        } else if (reactor->listen_fd == udata->fd) {
+            deepreact_accept_loop(reactor, accept_callback, getpid());
+        } else {
+            int done = 0;
+
+            if (events[i].events & EPOLLIN) {
+                done = deepreact_read_loop(udata);
+            }
+
+            if (events[i].events & EPOLLOUT && !done) {
+                done = deepreact_write_loop(udata);
+            }
+
+            if (done) {
+                fprintf(stderr, "Closed connection on descriptor %d\n",
+                        udata->fd);
+                cleanup_context(udata);
+            }
+        }
+    }
+}
+
 
 static inline void deep_serve(char* addr, char* port,
-                              void (*accept_callback)(struct yta_ctx* ctx)) {
+                              yta_callback accept_callback) {
     struct loop_core reac = create_reactor(addr, port);
     struct loop_core* reactor = &reac;
 
@@ -289,46 +410,18 @@ static inline void deep_serve(char* addr, char* port,
     struct epoll_event* events = (struct epoll_event*)calloc(
         MAX_EVENT_COUNT, sizeof(struct epoll_event));
 
+    struct epoll_event master_events[1];
+
     while (1) {
-        int event_count =
-            epoll_wait(reactor->epoll_fd, events, MAX_EVENT_COUNT, -1);
+        // we only extract a single event as the socket and timer events can influence each other (remove fds from the other epoll set)
+        // and such make the inner epoll_wait block
+        int num_loops = epoll_wait(reactor->master_epoll_fd, master_events, 1, -1);
 
-        // printf("%d ", event_count);
-
-        for (int i = 0; i < event_count; i++) {
-            struct yta_ctx* udata = (struct yta_ctx*)events[i].data.ptr;
-
-            if (((events[i].events & EPOLLERR) ||
-                 (events[i].events & EPOLLRDHUP)) &&
-                (!(events[i].events & EPOLLIN ||
-                   events[i].events & EPOLLOUT))) {
-
-                if (events[i].events & EPOLLHUP) {
-                    printf("Client disconnected\n");
-                } else {
-                    fprintf(stderr, "epoll error\n");
-                    fprintf(stderr, "error: %s\n", strerror(errno));
-                }
-
-                cleanup_context(udata);
-            } else if (reactor->listen_fd == udata->fd) {
-                deepreact_accept_loop(reactor, accept_callback, getpid());
-            } else {
-                int done = 0;
-
-                if (events[i].events & EPOLLIN) {
-                    done = deepreact_read_loop(udata);
-                }
-
-                if (events[i].events & EPOLLOUT && !done) {
-                    done = deepreact_write_loop(udata);
-                }
-
-                if (done || (!udata->write_callback && !udata->read_callback)) {
-                    fprintf(stderr, "Closed connection on descriptor %d\n",
-                            udata->fd);
-                    cleanup_context(udata);
-                }
+        for (int loop = 0; loop < num_loops; ++loop) {
+            if (master_events[loop].data.fd == reactor->timer_epoll_fd) {
+                serve_timers(reactor, events, MAX_EVENT_COUNT);
+            } else if (master_events[loop].data.fd == reactor->socket_epoll_fd) {
+                serve_sockets(reactor, events, MAX_EVENT_COUNT, accept_callback);
             }
         }
     }
@@ -340,8 +433,7 @@ static inline void deep_serve(char* addr, char* port,
 
 
 void yta_async_read(struct yta_ctx* ctx,
-                        void (*callback)(struct yta_ctx* ctx, void* /* buf */,
-                                         size_t /*count*/),
+                        yta_io_callback callback,
                         void* buf, size_t to_read) {
     ctx->read_callback = callback;
     ctx->read_buf = buf;
@@ -351,8 +443,7 @@ void yta_async_read(struct yta_ctx* ctx,
 
 
 void yta_async_write(struct yta_ctx* ctx,
-                         void (*callback)(struct yta_ctx* ctx,
-                                          void* /* buf */, size_t /*count*/),
+                        yta_io_callback callback,
                          void* buf, size_t to_write) {
     ctx->wtype = BASIC_WTYPE;
     ctx->write_callback = callback;
@@ -363,8 +454,7 @@ void yta_async_write(struct yta_ctx* ctx,
 
 
 void yta_async_sendfile(struct yta_ctx* ctx,
-                            void (*callback)(struct yta_ctx* ctx,
-                                             void* /* buf */, size_t /*count*/),
+                            yta_io_callback callback,
                             int fd, size_t to_write, size_t offset) {
     ctx->wtype = SENDFILE_WTYPE;
     ctx->write_callback = callback;
@@ -374,19 +464,44 @@ void yta_async_sendfile(struct yta_ctx* ctx,
     ctx->already_written = offset;
 }
 
-void yta_set_close_callback(struct yta_ctx* ctx, void (*callback)(struct yta_ctx* ctx)) {
+void yta_async_timer(struct yta_ctx* ctx, yta_callback callback, int timeout_seconds, int timeout_nanoseconds) {
+    ctx->timer_callback = callback;
+
+    if (ctx->timer_fd == 0) {
+        ctx->timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+        if (ctx->timer_fd == -1) {
+            printf("can't create timerfd\n");
+        }
+
+        struct epoll_event event;
+        event.data.ptr = ctx;
+        event.events = EPOLLIN | EPOLLET;
+        int status = epoll_ctl(ctx->reactor->timer_epoll_fd, EPOLL_CTL_ADD, ctx->timer_fd, &event);
+        if (status == -1) {
+            perror("epoll_ctl");
+            exit(1);
+        }
+    }
+
+    struct itimerspec timeout_spec = {
+        .it_interval.tv_sec = 0,
+        .it_interval.tv_nsec = 0,
+        .it_value.tv_sec = timeout_seconds,
+        .it_value.tv_nsec = timeout_nanoseconds
+    };
+
+    int status = timerfd_settime(ctx->timer_fd, 0, &timeout_spec, NULL);
+    if (status != 0) {
+        printf("can't settime timerfd\n");
+    }
+}
+
+void yta_set_close_callback(struct yta_ctx* ctx, yta_callback callback) {
     ctx->close_callback = callback;
 }
 
-
-void yta_close_context(struct yta_ctx* ctx) {
-    ctx->write_callback = NULL;
-    ctx->read_callback = NULL;
-}
-
-
 void yta_run(char* addr, char* port,
-                void (*accept_callback)(struct yta_ctx* ctx)) {
+                yta_callback accept_callback) {
 //    int status = chroot("./"); 
 //    if (status != 0) {
 //	fprintf(stderr, "failed chrooting, please CAP_SYS_CHROOT");

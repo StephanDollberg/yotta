@@ -226,7 +226,7 @@ int parse_headers(yta_ctx* ctx) {
 
 void accept_logic(struct yta_ctx* ctx, struct user_data* udata);
 
-void http_finish_callback(struct yta_ctx* ctx, void*, size_t) {
+yta_callback_status http_finish_callback(struct yta_ctx* ctx, void*, size_t) {
     struct user_data* udata = (struct user_data*)ctx->user_data;
 
     if (udata->file_fd != 0) {
@@ -235,19 +235,21 @@ void http_finish_callback(struct yta_ctx* ctx, void*, size_t) {
     }
 
     accept_logic(ctx, udata);
+    return YTA_OK;
 }
 
-void write_header_callback(yta_ctx* ctx, void*, size_t) {
+yta_callback_status write_header_callback(yta_ctx* ctx, void*, size_t) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
     if (udata->content) {
         yta_async_sendfile(ctx, http_finish_callback, udata->file_fd, udata->file_size,
                            udata->offset);
+        return YTA_OK;
     } else {
-        http_finish_callback(ctx, NULL, 0);
+        return http_finish_callback(ctx, NULL, 0);
     }
 }
 
-void read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
+yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
     std::size_t prev_count = udata->counter;
@@ -268,18 +270,18 @@ void read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
     if (udata->finalized) {
         yta_async_write(ctx, write_header_callback, udata->response_buf,
                         udata->response_size);
-        return;
+        return YTA_OK;
     }
 
     if (udata->counter == 512) {
-        http_finish_callback(ctx, NULL, 0);
-        return;
+        return http_finish_callback(ctx, NULL, 0);
     }
 
     yta_async_read(ctx, read_callback_http, (byte*)buf + read, 512 - udata->counter);
+    return YTA_OK;
 }
 
-void http_cleanup(struct yta_ctx* ctx) {
+yta_callback_status http_cleanup(struct yta_ctx* ctx) {
     struct user_data* udata = (struct user_data*)ctx->user_data;
 
     if (udata->file_fd != 0) {
@@ -288,9 +290,17 @@ void http_cleanup(struct yta_ctx* ctx) {
     }
 
     delete udata;
+
+    return YTA_EXIT;
 }
 
-void accept_logic(struct yta_ctx* ctx, struct user_data* udata) {
+yta_callback_status timer_callback(yta_ctx* ctx) {
+    //printf("timer callback\n");
+    yta_async_timer(ctx, timer_callback, 1, 0);
+    return YTA_OK;
+}
+
+void accept_logic(yta_ctx* ctx, struct user_data* udata) {
     udata->parser = pico_parser{};
     udata->counter = 0;
     udata->finalized = false;
@@ -298,11 +308,13 @@ void accept_logic(struct yta_ctx* ctx, struct user_data* udata) {
     yta_async_read(ctx, read_callback_http, udata->buf, 512);
 }
 
-void accept_callback_http(struct yta_ctx* ctx) {
+yta_callback_status accept_callback_http(struct yta_ctx* ctx) {
     struct user_data* udata = new user_data;
     ctx->user_data = udata;
     yta_set_close_callback(ctx, http_cleanup);
+    yta_async_timer(ctx, timer_callback, 1, 0);
     accept_logic(ctx, udata);
+    return YTA_OK;
 }
 
 int main(int argc, char** argv) {

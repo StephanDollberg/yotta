@@ -7,4 +7,4 @@ Core:
  - handle QUIT gracefully via signalfd() in the epoll loop
 
 HTTP:
- - sanitize path
+ - more tests

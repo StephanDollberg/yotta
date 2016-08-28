@@ -8,8 +8,11 @@ extern "C" {
 #include <stddef.h>
 
 struct yta_ctx;
+struct loop_core;
 
-typedef void (*yta_callback)(struct yta_ctx*, void*, size_t);
+typedef enum { YTA_OK, YTA_EXIT } yta_callback_status;
+typedef yta_callback_status (*yta_io_callback)(struct yta_ctx*, void*, size_t);
+typedef yta_callback_status (*yta_callback)(struct yta_ctx*);
 
 enum yta_write_type { BASIC_WTYPE, SENDFILE_WTYPE };
 
@@ -31,48 +34,47 @@ struct yta_ctx {
     void* user_data;
 
     // private
+    struct loop_core* reactor;
     int fd;
 
-    yta_callback read_callback;
+    yta_io_callback read_callback;
     void* read_buf;
     size_t already_read;
     size_t to_read;
 
-    yta_callback write_callback;
+    yta_io_callback write_callback;
     enum yta_write_type wtype;
     union yta_write_data wdata;
     size_t already_written;
     size_t to_write;
 
-    void (*close_callback)(struct yta_ctx*);
+    yta_callback close_callback;
+
+    int timer_fd;
+    yta_callback timer_callback;
 };
 
 void yta_async_read(struct yta_ctx* ctx,
-                        void (*callback)(struct yta_ctx* ctx, void* /* buf */,
-                                         size_t /*count*/),
+                        yta_io_callback callback,
                         void* buf, size_t to_read);
 
 
 void yta_async_write(struct yta_ctx* ctx,
-                         void (*callback)(struct yta_ctx* ctx,
-                                          void* /* buf */, size_t /*count*/),
+                         yta_io_callback callback,
                          void* buf, size_t to_write);
 
 
 void yta_async_sendfile(struct yta_ctx* ctx,
-                            void (*callback)(struct yta_ctx* ctx,
-                                             void* /* buf */, size_t /*count*/),
+                            yta_io_callback callback,
                             int fd, size_t to_write, size_t offset);
 
-
-void yta_set_close_callback(struct yta_ctx* ctx, void (*callback)(struct yta_ctx* ctx));
-
-
-void yta_close_context(struct yta_ctx* ctx);
+void yta_async_timer(struct yta_ctx* ctx, yta_callback callback, int timeout_seconds, int timeout_nanoseconds);
 
 
-void yta_run(char* addr, char* port,
-                void (*accept_callback)(struct yta_ctx* ctx));
+void yta_set_close_callback(struct yta_ctx* ctx, yta_callback callback);
+
+
+void yta_run(char* addr, char* port, yta_callback callback);
 
 #ifdef __cplusplus
 }
