@@ -20,8 +20,6 @@
 
 #include <unistd.h>
 
-#include <http_parser.h>
-
 namespace yta {
 namespace http {
 
