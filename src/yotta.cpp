@@ -294,10 +294,9 @@ yta_callback_status http_cleanup(struct yta_ctx* ctx) {
     return YTA_EXIT;
 }
 
-yta_callback_status timer_callback(yta_ctx* ctx) {
-    //printf("timer callback\n");
-    yta_async_timer(ctx, timer_callback, 1, 0);
-    return YTA_OK;
+yta_callback_status timer_callback(yta_ctx* /* ctx */) {
+    printf("Force closing http connection\n");
+    return YTA_EXIT;
 }
 
 void accept_logic(yta_ctx* ctx, struct user_data* udata) {
@@ -312,7 +311,7 @@ yta_callback_status accept_callback_http(struct yta_ctx* ctx) {
     struct user_data* udata = new user_data;
     ctx->user_data = udata;
     yta_set_close_callback(ctx, http_cleanup);
-    yta_async_timer(ctx, timer_callback, 1, 0);
+    yta_async_timer(ctx, timer_callback, 15, 0);
     accept_logic(ctx, udata);
     return YTA_OK;
 }
