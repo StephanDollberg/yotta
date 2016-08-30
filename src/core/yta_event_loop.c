@@ -483,12 +483,9 @@ void yta_async_timer(struct yta_ctx* ctx, yta_callback callback, int timeout_sec
         }
     }
 
-    struct itimerspec timeout_spec = {
-        .it_interval.tv_sec = 0,
-        .it_interval.tv_nsec = 0,
-        .it_value.tv_sec = timeout_seconds,
-        .it_value.tv_nsec = timeout_nanoseconds
-    };
+    struct timespec interval = { .tv_sec = 0, .tv_nsec = 0 };
+    struct timespec value = { .tv_sec = timeout_seconds, .tv_nsec = timeout_nanoseconds };
+    struct itimerspec timeout_spec = { .it_interval = interval, .it_value = value };
 
     int status = timerfd_settime(ctx->timer_fd, 0, &timeout_spec, NULL);
     if (status != 0) {
@@ -502,12 +499,6 @@ void yta_set_close_callback(struct yta_ctx* ctx, yta_callback callback) {
 
 void yta_run(char* addr, char* port,
                 yta_callback accept_callback) {
-//    int status = chroot("./"); 
-//    if (status != 0) {
-//	fprintf(stderr, "failed chrooting, please CAP_SYS_CHROOT");
-//	exit(1);
-//    }
-
     // TODO: replace with sigaction usage
     signal(SIGPIPE, SIG_IGN);
     signal(SIGTERM, sigterm_handler);
