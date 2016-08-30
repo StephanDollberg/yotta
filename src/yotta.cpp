@@ -24,6 +24,7 @@
 #include "picohttpparser/picohttpparser.h"
 
 const std::size_t MAX_HEADERS = 20;
+const std::size_t MAX_BUFFER_SIZE = 512;
 
 typedef unsigned char byte;
 
@@ -41,8 +42,8 @@ struct pico_parser {
 struct user_data {
     std::size_t counter;
 
-    char buf[512];
-    char response_buf[512];
+    char buf[MAX_BUFFER_SIZE];
+    char response_buf[MAX_BUFFER_SIZE];
 
     bool finalized;
 
@@ -273,11 +274,11 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
         return YTA_OK;
     }
 
-    if (udata->counter == 512) {
+    if (udata->counter == MAX_BUFFER_SIZE) {
         return http_finish_callback(ctx, NULL, 0);
     }
 
-    yta_async_read(ctx, read_callback_http, (byte*)buf + read, 512 - udata->counter);
+    yta_async_read(ctx, read_callback_http, (byte*)buf + read, MAX_BUFFER_SIZE - udata->counter);
     return YTA_OK;
 }
 
@@ -304,7 +305,7 @@ void accept_logic(yta_ctx* ctx, struct user_data* udata) {
     udata->counter = 0;
     udata->finalized = false;
     udata->file_fd = 0;
-    yta_async_read(ctx, read_callback_http, udata->buf, 512);
+    yta_async_read(ctx, read_callback_http, udata->buf, MAX_BUFFER_SIZE);
 }
 
 yta_callback_status accept_callback_http(struct yta_ctx* ctx) {
