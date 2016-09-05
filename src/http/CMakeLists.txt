@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 2.6)
 project (yotta_http)
 
-set (CMAKE_CXX_FLAGS "--std=c++11 -Wall -Werror -Wextra -pedantic -O3 -fno-omit-frame-pointer")
+set (CMAKE_CXX_FLAGS "--std=c++1z -Wall -Werror -Wextra -pedantic -O3 -fsanitize=address -fno-omit-frame-pointer -fstack-protector-strong -fpie -Wl,-z,relro,-z,now")
 
 add_library(http yta_http.cpp)
 

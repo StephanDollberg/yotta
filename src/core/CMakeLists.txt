@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 2.6)
 project (yotta_core)
 
-set (CMAKE_C_FLAGS "--std=gnu11 -g -O3 -Wall -Werror -Wextra -pedantic -fsanitize=address -fno-omit-frame-pointer")
+set (CMAKE_C_FLAGS "--std=gnu11 -g -O3 -Wall -Werror -Wextra -pedantic -fsanitize=address -fno-omit-frame-pointer -fstack-protector-strong -fpie -Wl,-z,relro,-z,now")
 
 add_library(core yta_event_loop.c yta_process.c)
 

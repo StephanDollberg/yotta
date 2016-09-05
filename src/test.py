@@ -55,6 +55,7 @@ def main():
 
 
 
+    # modified since test
     resp = sess.get(base + '/hello.html')
     assert resp.status_code == 200 
     assert resp.text == 'hello world'
@@ -67,11 +68,12 @@ def main():
     
     
 
+    # normalization integration test
     resp = requests.get(base + '/../../../../../../../../etc/passwd')
     assert resp.status_code == 404
 
 
-
+    # range test
     resp = sess.get(base + '/hello.html', 
         headers={'Range': 'bytes=2-3'})
     assert resp.status_code == 206
