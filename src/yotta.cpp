@@ -18,6 +18,10 @@
 
 #include <unistd.h>
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+
 #include "core/yta_event_loop.h"
 #include "http/yta_http.hpp"
 
@@ -251,6 +255,14 @@ yta_callback_status http_finish_callback(struct yta_ctx* ctx, void*, size_t) {
         udata->file_fd = 0;
     }
 
+    // uncork
+    int enable = 0;
+    if (setsockopt(ctx->fd, IPPROTO_TCP, TCP_CORK, &enable, sizeof(enable)) <
+        0) {
+        fprintf(stderr, "error setting TCP_CORK");
+        exit(1);
+    }
+
     accept_logic(ctx, udata);
     return YTA_OK;
 }
@@ -285,6 +297,14 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
     }
 
     if (udata->finalized) {
+        // cork
+        int enable = 1;
+        if (setsockopt(ctx->fd, IPPROTO_TCP, TCP_CORK, &enable, sizeof(enable)) <
+            0) {
+            fprintf(stderr, "error setting TCP_CORK");
+            exit(1);
+        }
+
         yta_async_write(ctx, write_header_callback, udata->response_buf,
                         udata->response_size);
         return YTA_OK;
