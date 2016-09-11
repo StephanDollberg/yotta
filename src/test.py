@@ -12,6 +12,14 @@ def main():
     assert resp.status_code == 200
     assert resp.text == 'hello world'
 
+    resp = requests.get(base + '/hello.html?foo=bar&baz=lol?rofl')
+    assert resp.status_code == 200
+    assert resp.text == 'hello world'
+
+    resp = requests.get(base + '/')
+    assert resp.status_code == 200
+    assert resp.text == 'hello world'
+
     sess = requests.session()
 
     resp = sess.get(base + '/hello.html')
@@ -21,7 +29,6 @@ def main():
     resp = sess.get(base + '/hello.html')
     assert resp.status_code == 200
     assert resp.text == 'hello world'
-
 
 
 
@@ -38,7 +45,6 @@ def main():
     resp = sess.get(base + '/404')
     assert resp.status_code == 404 
     assert resp.text == ''
-
 
 
 

@@ -76,10 +76,26 @@ void return_404(user_data* udata) {
 int parse_url(yta_ctx* ctx, const char* at, size_t length) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
+    // parse query string
+    auto pos = std::find(at, at + length, '?');
+    if (pos != at + length) {
+        length = pos - at;
+    }
+
+    // clean path
     char* path = const_cast<char*>(at); // UB
     auto new_length = yta::http::clean_path(path, length);
-    path[new_length] = '\0';
     *(--path) = '.';
+    ++new_length;
+
+    // append index.html to ./
+    if (path[new_length - 1] == '/') {
+        const char index_html[] = "index.html";
+        std::copy(index_html, index_html + 10, path + new_length);
+        new_length += 10;
+    }
+
+    path[new_length] = '\0';
 
     int ffd = open(path, O_RDONLY);
 
