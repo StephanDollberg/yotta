@@ -24,7 +24,7 @@
 #include "picohttpparser/picohttpparser.h"
 
 const std::size_t MAX_HEADERS = 20;
-const std::size_t MAX_BUFFER_SIZE = 512;
+const std::size_t MAX_BUFFER_SIZE = 1024;
 
 typedef unsigned char byte;
 
