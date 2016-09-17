@@ -8,3 +8,4 @@ Core:
 
 HTTP:
  - more tests
+ - better timeout management (similar to what varnish does)
