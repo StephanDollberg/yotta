@@ -1,6 +1,6 @@
 Core:
 
- - tests
+ - `LD_PRELOAD` tests
 
  - write upgrade script
  - handle QUIT gracefully via signalfd() in the epoll loop
