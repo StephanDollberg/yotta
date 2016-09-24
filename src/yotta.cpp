@@ -32,7 +32,7 @@ const std::size_t MAX_BUFFER_SIZE = 1024;
 
 typedef unsigned char byte;
 
-struct pico_parser {
+struct parser_data {
     const char* method = nullptr;
     std::size_t method_len = 0;
     const char* path = nullptr;
@@ -58,7 +58,7 @@ struct user_data {
     int file_size;
     int offset = 0;
 
-    pico_parser parser;
+    parser_data parser;
 
     struct stat file_stat;
 };
@@ -337,7 +337,7 @@ yta_callback_status timer_callback(yta_ctx* /* ctx */) {
 }
 
 void accept_logic(yta_ctx* ctx, struct user_data* udata) {
-    udata->parser = pico_parser{};
+    udata->parser = parser_data{};
     udata->counter = 0;
     udata->finalized = false;
     udata->file_fd = 0;

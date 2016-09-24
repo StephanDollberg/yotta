@@ -36,7 +36,7 @@ struct loop_core {
     int timer_epoll_fd;
 };
 
-typedef enum { YTA_LOOP_CONTINUE, YTA_LOOP_DONE, YTA_LOOP_AGAIN } yta_loop_status;
+enum yta_loop_status { YTA_LOOP_CONTINUE, YTA_LOOP_AGAIN , YTA_LOOP_ERROR };
 
 // some of util functions based on
 // https://banu.com/blog/2/how-to-use-epoll-a-complete-example-in-c/
@@ -179,7 +179,7 @@ static struct loop_core create_reactor(char* addr, char* port) {
     return reactor;
 }
 
-static inline void accept_loop(struct loop_core* reactor, yta_callback accept_callback,
+static void accept_loop(struct loop_core* reactor, yta_callback accept_callback,
                                pid_t worker_pid) {
     while (1) {
         struct sockaddr in_addr;
@@ -187,7 +187,7 @@ static inline void accept_loop(struct loop_core* reactor, yta_callback accept_ca
         int infd;
         char host_buf[NI_MAXHOST], port_buf[NI_MAXSERV];
 
-        in_len = sizeof in_addr;
+        in_len = sizeof(in_addr);
         infd = accept(reactor->listen_fd, &in_addr, &in_len);
         if (infd == -1) {
             if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
@@ -231,41 +231,41 @@ static inline void accept_loop(struct loop_core* reactor, yta_callback accept_ca
     }
 }
 
-static inline int read_loop(struct yta_ctx* udata) {
+static int read_loop(struct yta_ctx* udata) {
     while (udata->read_callback) {
         ssize_t count = read(udata->fd, udata->read_buf, udata->to_read);
         if (count == -1) {
             if (errno != EAGAIN) {
                 perror("read");
-                return 1;
+                return YTA_LOOP_ERROR;
             }
 
             break;
         } else if (count == 0) {
-            return 1;
+            return YTA_LOOP_ERROR;
         }
 
         yta_io_callback read_callback = udata->read_callback;
         udata->read_callback = NULL;
         if (read_callback(udata, udata->read_buf, count) != YTA_OK) {
-            return 1;
+            return YTA_LOOP_ERROR;
         }
     }
 
-    return 0;
+    return YTA_LOOP_CONTINUE;
 }
 
-static inline int write_handle_basic(struct yta_ctx* udata) {
+static int write_handle_basic(struct yta_ctx* udata) {
     ssize_t count = write(udata->fd, (byte*)udata->wdata.basic_data.write_buf +
                                          udata->already_written,
                           udata->to_write - udata->already_written);
     if (count == -1) {
         if (errno != EAGAIN) {
             perror("write basic");
-            return 1;
+            return YTA_LOOP_ERROR;
         }
 
-        return -1;
+        return YTA_LOOP_AGAIN;
     } else if (count == 0) {
         assert(0);
     }
@@ -276,24 +276,24 @@ static inline int write_handle_basic(struct yta_ctx* udata) {
         udata->write_callback = NULL;
         if (write_callback(udata, udata->wdata.basic_data.write_buf,
                            udata->already_written) != YTA_OK) {
-            return 1;
+            return YTA_LOOP_ERROR;
         }
     }
 
-    return 0;
+    return YTA_LOOP_CONTINUE;
 }
 
-static inline int write_handle_sendfile(struct yta_ctx* udata) {
+static int write_handle_sendfile(struct yta_ctx* udata) {
     off_t tfile_counter = udata->already_written;
     ssize_t count = sendfile(udata->fd, udata->wdata.sendfile_data.file_fd,
                              &tfile_counter, udata->to_write - udata->already_written);
     if (count == -1) {
         if (errno != EAGAIN) {
             perror("write sendfile");
-            return 1;
+            return YTA_LOOP_ERROR;
         }
 
-        return -1;
+        return YTA_LOOP_AGAIN;
     } else if (count == 0) {
         assert(0);
     }
@@ -303,26 +303,26 @@ static inline int write_handle_sendfile(struct yta_ctx* udata) {
         yta_io_callback write_callback = udata->write_callback;
         udata->write_callback = NULL;
         if (write_callback(udata, NULL, udata->already_written) != YTA_OK) {
-            return 1;
+            return YTA_LOOP_ERROR;
         }
     }
 
-    return 0;
+    return YTA_LOOP_CONTINUE;
 }
 
-static inline int write_loop(struct yta_ctx* udata) {
-    int done = 0;
-    while (!done && udata->write_callback) {
+static int write_loop(struct yta_ctx* udata) {
+    enum yta_loop_status status = YTA_LOOP_CONTINUE;
+    while (status == YTA_LOOP_CONTINUE && udata->write_callback) {
         if (udata->wtype == BASIC_WTYPE) {
-            done = write_handle_basic(udata);
+            status = write_handle_basic(udata);
         } else {
-            done = write_handle_sendfile(udata);
+            status = write_handle_sendfile(udata);
         }
     }
 
-    return done == -1 ? 0 : done;
+    return status;
 }
-static inline void serve_timers(struct loop_core* reactor, struct epoll_event* events,
+static void serve_timers(struct loop_core* reactor, struct epoll_event* events,
                                 const int MAX_EVENT_COUNT) {
     int event_count = epoll_wait(reactor->timer_epoll_fd, events, MAX_EVENT_COUNT, -1);
 
@@ -352,7 +352,7 @@ static inline void serve_timers(struct loop_core* reactor, struct epoll_event* e
     }
 }
 
-static inline void serve_sockets(struct loop_core* reactor, struct epoll_event* events,
+static void serve_sockets(struct loop_core* reactor, struct epoll_event* events,
                                  const int MAX_EVENT_COUNT,
                                  yta_callback accept_callback) {
     int event_count = epoll_wait(reactor->socket_epoll_fd, events, MAX_EVENT_COUNT, -1);
@@ -374,18 +374,17 @@ static inline void serve_sockets(struct loop_core* reactor, struct epoll_event* 
         } else if (reactor->listen_fd == udata->fd) {
             accept_loop(reactor, accept_callback, getpid());
         } else {
-            int done = 0;
-            printf("in loop\n");
+            enum yta_loop_status status = 0;
 
             if (events[i].events & EPOLLIN) {
-                done = read_loop(udata);
+                status = read_loop(udata);
             }
 
-            if (events[i].events & EPOLLOUT && !done) {
-                done = write_loop(udata);
+            if (events[i].events & EPOLLOUT && status == YTA_LOOP_CONTINUE) {
+                status = write_loop(udata);
             }
 
-            if (done) {
+            if (status == YTA_LOOP_ERROR) {
                 fprintf(stderr, "Closed connection on descriptor %d\n", udata->fd);
                 cleanup_context(udata);
             }
@@ -393,7 +392,7 @@ static inline void serve_sockets(struct loop_core* reactor, struct epoll_event* 
     }
 }
 
-static inline void serve(char* addr, char* port, yta_callback accept_callback) {
+static void serve(char* addr, char* port, yta_callback accept_callback) {
     struct loop_core reac = create_reactor(addr, port);
     struct loop_core* reactor = &reac;
 
