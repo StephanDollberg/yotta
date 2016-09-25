@@ -80,7 +80,7 @@ void return_404(user_data* udata) {
 
 std::unordered_map<std::experimental::string_view, std::experimental::string_view> mime_types {
     { ".html", "text/html" }, { ".css", "text/css" }, { ".png", "image/png"}, { ".jpg", "image/jpeg" },
-    { ".jpeg", "image/jpeg"}
+    { ".jpeg", "image/jpeg"}, { ".txt", "text/plain" }, {".js", "application/x-javascript"}
 };
 
 int parse_url(yta_ctx* ctx, const char* at, size_t length) {
