@@ -53,6 +53,7 @@ struct user_data {
 
     int response_size;
     bool content;
+    std::experimental::string_view extension;
 
     int file_fd;
     int file_size;
@@ -76,6 +77,11 @@ void return_404(user_data* udata) {
     udata->content = false;
     udata->finalized = true;
 }
+
+std::unordered_map<std::experimental::string_view, std::experimental::string_view> mime_types {
+    { ".html", "text/html" }, { ".css", "text/css" }, { ".png", "image/png"}, { ".jpg", "image/jpeg" },
+    { ".jpeg", "image/jpeg"}
+};
 
 int parse_url(yta_ctx* ctx, const char* at, size_t length) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
@@ -115,6 +121,21 @@ int parse_url(yta_ctx* ctx, const char* at, size_t length) {
         return_404(udata);
         close(ffd);
         return 0;
+    }
+
+    std::experimental::string_view path_view(path, new_length);
+    auto path_begin = path_view.rfind('.');
+
+    // we always find . at the beginning because of ./FILENAME
+    if (path_begin != 0) {
+        auto it = mime_types.find(path_view.substr(path_begin));
+        if (it != mime_types.end()) {
+            udata->extension = it->second;
+        } else {
+            udata->extension = { "text/html" };
+        }
+    } else {
+        udata->extension = { "text/html" };
     }
 
     udata->file_fd = ffd;
@@ -237,7 +258,7 @@ int parse_headers(yta_ctx* ctx) {
 
     if (!udata->finalized) {
         auto end = yta::http::serve_200(udata->response_buf, udata->file_size,
-                                        &udata->file_stat.st_mtime);
+                                        &udata->file_stat.st_mtime, udata->extension);
         udata->response_size = end - udata->response_buf;
         udata->content = true;
         udata->finalized = true;

@@ -11,14 +11,32 @@ def main():
     resp = requests.get(base + '/hello.html')
     assert resp.status_code == 200
     assert resp.text == 'hello world'
+    assert resp.headers['Content-Type'] == 'text/html'
 
     resp = requests.get(base + '/hello.html?foo=bar&baz=lol?rofl')
     assert resp.status_code == 200
     assert resp.text == 'hello world'
+    assert resp.headers['Content-Type'] == 'text/html'
 
     resp = requests.get(base + '/')
     assert resp.status_code == 200
     assert resp.text == 'hello world'
+    assert resp.headers['Content-Type'] == 'text/html'
+
+    resp = requests.get(base + '/test.css')
+    assert resp.status_code == 200
+    assert resp.text == 'css'
+    assert resp.headers['Content-Type'] == 'text/css'
+
+    resp = requests.get(base + '/noending')
+    assert resp.status_code == 200
+    assert resp.text == 'noending'
+    assert resp.headers['Content-Type'] == 'text/html'
+
+    resp = requests.get(base + '/foo.unknown')
+    assert resp.status_code == 200
+    assert resp.text == 'foo'
+    assert resp.headers['Content-Type'] == 'text/html'
 
     sess = requests.session()
 

@@ -4,10 +4,12 @@
 #include <time.h>
 #include <cstddef>
 
+#include <experimental/string_view>
+
 namespace yta {
 namespace http {
 
-char* serve_200(char* buf, int content_length, time_t* last_modified);
+char* serve_200(char* buf, int content_length, time_t* last_modified, std::experimental::string_view extension);
 
 char* serve_206(char* buf, int content_length,
                 time_t* last_modified, int range_start, int range_end, int file_size);
