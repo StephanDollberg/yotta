@@ -2,9 +2,10 @@ Core:
 
  - `LD_PRELOAD` tests
 
- - write upgrade script
  - handle QUIT gracefully via signalfd() in the epoll loop
- - write PYPY integration (lolwut)
+ - write upgrade script
+ - write PYPY integration (lolwut) 
+ - streamline logging
 
 HTTP:
  - more tests
