@@ -78,9 +78,10 @@ void yta_fork_workers(int workers) {
                 if (worker_pid == 0) {
                     signal(SIGTERM, SIG_DFL);
                     signal(SIGQUIT, SIG_DFL);
+                } else {
+                    worker_pids[i] = worker_pid;
                 }
 
-                worker_pids[i] = worker_pid;
                 break;
             }
         }
