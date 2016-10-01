@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 
-void sigterm_handler(int /* signo */);
+void signal_handler(int /* signo */);
 
 void yta_fork_workers();
 

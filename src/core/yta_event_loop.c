@@ -18,6 +18,7 @@
 #include <sys/timerfd.h>
 #include <sys/types.h>
 #include <sys/unistd.h>
+#include <sys/signalfd.h>
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -31,9 +32,15 @@ typedef unsigned char byte;
 
 struct loop_core {
     int listen_fd;
+    struct yta_ctx* listen_fd_ctx; // only stored to free later
+
     int socket_epoll_fd;
-    int master_epoll_fd;
     int timer_epoll_fd;
+    int signal_fd;
+
+    int master_epoll_fd;
+
+    int current_clients;
 };
 
 enum yta_loop_status { YTA_LOOP_CONTINUE, YTA_LOOP_AGAIN , YTA_LOOP_ERROR };
@@ -79,7 +86,11 @@ static int make_listen_socket(char* addr, char* port) {
         exit(1);
     }
 
-    free(res);
+    do {
+        struct addrinfo* next = res->ai_next;
+        free(res);
+        res = next;
+    } while(res);
 
     return listen_fd;
 }
@@ -99,7 +110,7 @@ static void set_nonblock(int listen_fd) {
     }
 }
 
-static void cleanup_context(struct yta_ctx* ctx) {
+static void cleanup_context(struct loop_core* reactor, struct yta_ctx* ctx) {
     close(ctx->fd);
 
     if (ctx->timer_fd != 0) {
@@ -111,10 +122,12 @@ static void cleanup_context(struct yta_ctx* ctx) {
     }
 
     free(ctx);
+    --reactor->current_clients;
 }
 
 static struct loop_core create_reactor(char* addr, char* port) {
     struct loop_core reactor;
+    reactor.current_clients = 0;
 
     // both exit directly on error
     reactor.listen_fd = make_listen_socket(addr, port);
@@ -134,9 +147,9 @@ static struct loop_core create_reactor(char* addr, char* port) {
 
     struct epoll_event listen_event;
     listen_event.events = EPOLLIN | EPOLLET;
-    struct yta_ctx* ctx = (struct yta_ctx*)calloc(1, sizeof(struct yta_ctx));
-    listen_event.data.ptr = ctx;
-    ctx->fd = reactor.listen_fd;
+    reactor.listen_fd_ctx = (struct yta_ctx*)calloc(1, sizeof(struct yta_ctx));
+    listen_event.data.ptr = reactor.listen_fd_ctx;
+    reactor.listen_fd_ctx->fd = reactor.listen_fd;
     status = epoll_ctl(reactor.socket_epoll_fd, EPOLL_CTL_ADD, reactor.listen_fd,
                        &listen_event);
     if (status == -1) {
@@ -147,6 +160,31 @@ static struct loop_core create_reactor(char* addr, char* port) {
     reactor.timer_epoll_fd = epoll_create1(0);
     if (reactor.timer_epoll_fd == -1) {
         perror("error creating timer epoll fd");
+        exit(1);
+    }
+
+    sigset_t signal_set;
+    status = sigemptyset(&signal_set);
+    if (status == -1) {
+        perror("error initializing signal set");
+        exit(1);
+    }
+
+    status = sigaddset(&signal_set, SIGQUIT);
+    if (status == -1) {
+        perror("error adding SIGQUIT to sig mask");
+        exit(1);
+    }
+
+    status = sigprocmask(SIG_SETMASK, &signal_set, NULL);
+    if (status == -1) {
+        perror("error setting sigprocmask");
+        exit(1);
+    }
+
+    reactor.signal_fd = signalfd(-1, &signal_set, SFD_NONBLOCK);
+    if (reactor.signal_fd == -1) {
+        perror("error creating signal fd");
         exit(1);
     }
 
@@ -173,6 +211,15 @@ static struct loop_core create_reactor(char* addr, char* port) {
                        &timer_event);
     if (status == -1) {
         perror("error adding timer epoll fd to epoll set");
+        exit(1);
+    }
+
+    struct epoll_event signal_event;
+    signal_event.data.fd = reactor.signal_fd;
+    signal_event.events = EPOLLIN | EPOLLET;
+    status = epoll_ctl(reactor.master_epoll_fd, EPOLL_CTL_ADD, reactor.signal_fd, &signal_event);
+    if (status == -1) {
+        perror("error adding signal fd to epoll set");
         exit(1);
     }
 
@@ -228,6 +275,8 @@ static void accept_loop(struct loop_core* reactor, yta_callback accept_callback,
         }
 
         accept_callback(udata);
+
+        ++reactor->current_clients;
     }
 }
 
@@ -339,11 +388,11 @@ static void serve_timers(struct loop_core* reactor, struct epoll_event* events,
                 fprintf(stderr, "error: %s\n", strerror(errno));
             }
 
-            cleanup_context(ctx);
+            cleanup_context(reactor, ctx);
         } else {
             if (events[i].events & EPOLLIN) {
                 if (ctx->timer_callback(ctx) != YTA_OK) {
-                    cleanup_context(ctx);
+                    cleanup_context(reactor, ctx);
                 }
             } else {
                 assert(0);
@@ -370,7 +419,7 @@ static void serve_sockets(struct loop_core* reactor, struct epoll_event* events,
                 fprintf(stderr, "error: %s\n", strerror(errno));
             }
 
-            cleanup_context(udata);
+            cleanup_context(reactor, udata);
         } else if (reactor->listen_fd == udata->fd) {
             accept_loop(reactor, accept_callback, getpid());
         } else {
@@ -386,7 +435,7 @@ static void serve_sockets(struct loop_core* reactor, struct epoll_event* events,
 
             if (status == YTA_LOOP_ERROR) {
                 fprintf(stderr, "Closed connection on descriptor %d\n", udata->fd);
-                cleanup_context(udata);
+                cleanup_context(reactor, udata);
             }
         }
     }
@@ -397,30 +446,34 @@ static void serve(char* addr, char* port, yta_callback accept_callback) {
     struct loop_core* reactor = &reac;
 
     const int MAX_EVENT_COUNT = 1024;
-    struct epoll_event* events =
-        (struct epoll_event*)calloc(MAX_EVENT_COUNT, sizeof(struct epoll_event));
+    struct epoll_event events[MAX_EVENT_COUNT];
 
-    struct epoll_event master_events[1];
+    struct epoll_event master_event;
 
-    while (1) {
+    int terminated = 0;
+
+    while (!terminated || reactor->current_clients) {
         // we only extract a single event as the socket and timer events can
         // influence
         // each other (remove fds from the other epoll set)
         // and such make the inner epoll_wait block
-        int num_loops = epoll_wait(reactor->master_epoll_fd, master_events, 1, -1);
+        epoll_wait(reactor->master_epoll_fd, &master_event, 1, -1);
 
-        for (int loop = 0; loop < num_loops; ++loop) {
-            if (master_events[loop].data.fd == reactor->timer_epoll_fd) {
-                serve_timers(reactor, events, MAX_EVENT_COUNT);
-            } else if (master_events[loop].data.fd == reactor->socket_epoll_fd) {
-                serve_sockets(reactor, events, MAX_EVENT_COUNT, accept_callback);
-            }
+        if (master_event.data.fd == reactor->socket_epoll_fd) {
+            serve_sockets(reactor, events, MAX_EVENT_COUNT, accept_callback);
+        } else if (master_event.data.fd == reactor->timer_epoll_fd) {
+            serve_timers(reactor, events, MAX_EVENT_COUNT);
+        } else if (master_event.data.fd == reactor->signal_fd) {
+            printf("Worker ordered to terminate, closing listening socket ...\n");
+            terminated = 1;
+            close(reactor->listen_fd);
+            free(reactor->listen_fd_ctx);
         }
     }
 
-    free(events);
+    printf("Worker terminated\n");
 
-    close(reactor->listen_fd);
+    free(events);
 }
 
 void yta_async_read(struct yta_ctx* ctx, yta_io_callback callback, void* buf,
@@ -488,8 +541,9 @@ void yta_set_close_callback(struct yta_ctx* ctx, yta_callback callback) {
 void yta_run(char* addr, char* port, yta_callback accept_callback) {
     // TODO: replace with sigaction usage
     signal(SIGPIPE, SIG_IGN);
-    signal(SIGTERM, sigterm_handler);
-    yta_fork_workers();
+    signal(SIGTERM, signal_handler);
+    signal(SIGQUIT, signal_handler);
+    yta_fork_workers(4);
 
     serve(addr, port, accept_callback);
 }

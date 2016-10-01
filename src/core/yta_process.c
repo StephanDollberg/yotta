@@ -11,21 +11,26 @@
 #include <stdio.h>
 
 pid_t* worker_pids = NULL;
+sig_atomic_t worker_count = 0;
 
-void sigterm_handler(int signo) {
-    (void)signo;
-
+void forward_signal_to_workers(int signo) {
     if (worker_pids != NULL) {
-        for (int i = 0; i < 4; ++i) {
-            kill(worker_pids[i], SIGTERM);
+        for (int i = 0; i < worker_count; ++i) {
+            kill(worker_pids[i], signo);
         }
     }
+}
 
+void signal_handler(int signo) {
+    forward_signal_to_workers(signo);
+    if (worker_pids != NULL) {
+        free(worker_pids);
+    }
     exit(1);
 }
 
-void yta_fork_workers() {
-    int workers = 4;
+void yta_fork_workers(int workers) {
+    worker_count = workers;
     worker_pids = (pid_t*)malloc(workers * sizeof(pid_t));
 
     if (worker_pids == NULL) {
@@ -45,8 +50,8 @@ void yta_fork_workers() {
         }
 
         if (worker_pid == 0) {
-            // prctl(PR_SET_NAME, (long)("nginy worker"));
             signal(SIGTERM, SIG_DFL);
+            signal(SIGQUIT, SIG_DFL);
             break;
         } else {
             worker_pids[i] = worker_pid;
@@ -72,6 +77,7 @@ void yta_fork_workers() {
 
                 if (worker_pid == 0) {
                     signal(SIGTERM, SIG_DFL);
+                    signal(SIGQUIT, SIG_DFL);
                 }
 
                 worker_pids[i] = worker_pid;
