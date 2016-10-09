@@ -70,7 +70,8 @@ void return_404(user_data* udata) {
 
 std::unordered_map<std::experimental::string_view, std::experimental::string_view> mime_types {
     { ".html", "text/html" }, { ".css", "text/css" }, { ".png", "image/png"}, { ".jpg", "image/jpeg" },
-    { ".jpeg", "image/jpeg"}, { ".txt", "text/plain" }, {".js", "application/x-javascript"}
+    { ".jpeg", "image/jpeg"}, { ".txt", "text/plain" }, {".js", "application/x-javascript"},
+    { ".opus", "audio/opus"}
 };
 
 int parse_url(yta_ctx* ctx, const char* at, size_t length) {
@@ -364,13 +365,23 @@ yta_callback_status accept_callback_http(struct yta_ctx* ctx) {
     return YTA_OK;
 }
 
+
 int main(int argc, char** argv) {
-    if (argc != 3) {
+    if (argc < 3) {
         fprintf(stderr, "Usage: %s addr port\n", argv[0]);
         exit(1);
     }
 
-    yta_run(argv[1], argv[2], accept_callback_http);
+    char default_pidfile[] =  { "/tmp/yotta.pid" };
+    char* pidfile_path = default_pidfile;
+
+    if (argc == 4) {
+        pidfile_path = argv[3];
+    }
+
+    yta_run(argv[1], argv[2], pidfile_path, accept_callback_http);
+
+    std::remove(pidfile_path);
 
     return 0;
 }

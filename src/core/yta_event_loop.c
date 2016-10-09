@@ -538,12 +538,13 @@ void yta_set_close_callback(struct yta_ctx* ctx, yta_callback callback) {
     ctx->close_callback = callback;
 }
 
-void yta_run(char* addr, char* port, yta_callback accept_callback) {
+void yta_run(char* addr, char* port, char* pidfile_path, yta_callback accept_callback) {
     // TODO: replace with sigaction usage
     signal(SIGPIPE, SIG_IGN);
     signal(SIGTERM, signal_handler);
+    signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);
-    yta_fork_workers(4);
+    yta_fork_workers(4, pidfile_path);
 
     serve(addr, port, accept_callback);
 }

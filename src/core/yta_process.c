@@ -9,9 +9,11 @@
 #include <stdlib.h>
 
 #include <stdio.h>
+#include <string.h>
 
 pid_t* worker_pids = NULL;
 sig_atomic_t worker_count = 0;
+char* pidfile_to_delete = NULL;
 
 void forward_signal_to_workers(int signo) {
     if (worker_pids != NULL) {
@@ -26,10 +28,41 @@ void signal_handler(int signo) {
     if (worker_pids != NULL) {
         free(worker_pids);
     }
-    exit(1);
+
+    remove(pidfile_to_delete);
+
+    if (signo == SIGQUIT) {
+        exit(0);
+    } else {
+        exit(1);
+    }
 }
 
-void yta_fork_workers(int workers) {
+void write_pidfile(char* pidfile_path) {
+    FILE* pidfile = fopen(pidfile_path, "w");
+    if (pidfile == NULL) {
+        fprintf(stderr, "can't open pidfile");
+        exit(1);
+    }
+
+    int pid = getpid();
+    char pid_buf[10] = { 0 };
+    sprintf(pid_buf, "%d", pid);
+
+    size_t status = fwrite(pid_buf, strlen(pid_buf), 1, pidfile);
+    if (status != 1) {
+        fprintf(stderr, "can't write to pidfile");
+        exit(1);
+    };
+
+    pidfile_to_delete = pidfile_path;
+
+    fclose(pidfile);
+}
+
+void yta_fork_workers(int workers, char* pidfile_path) {
+    write_pidfile(pidfile_path);
+
     worker_count = workers;
     worker_pids = (pid_t*)malloc(workers * sizeof(pid_t));
 
