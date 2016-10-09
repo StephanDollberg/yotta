@@ -472,8 +472,6 @@ static void serve(char* addr, char* port, yta_callback accept_callback) {
     }
 
     printf("Worker terminated\n");
-
-    free(events);
 }
 
 void yta_async_read(struct yta_ctx* ctx, yta_io_callback callback, void* buf,
