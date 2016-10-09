@@ -11,7 +11,7 @@ Current HTTP Features:
 Event loop:
  - Edge triggered `epoll`
  - Worker Processes (connections loadbalanced via `REUSEPORT`)
- - timers via `signalfd`
+ - timers via `timerfd`
  - `sendfile`
 
 ### Building
