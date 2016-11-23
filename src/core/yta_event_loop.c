@@ -125,19 +125,11 @@ static void cleanup_context(struct loop_core* reactor, struct yta_ctx* ctx) {
     --reactor->current_clients;
 }
 
-static struct loop_core create_reactor(char* addr, char* port) {
+static struct loop_core create_reactor(int listen_fd) {
     struct loop_core reactor;
     reactor.current_clients = 0;
 
-    // both exit directly on error
-    reactor.listen_fd = make_listen_socket(addr, port);
-    set_nonblock(reactor.listen_fd);
-
-    int status = listen(reactor.listen_fd, SOMAXCONN);
-    if (status == -1) {
-        perror("error on listening");
-        exit(1);
-    }
+    reactor.listen_fd = listen_fd;
 
     reactor.socket_epoll_fd = epoll_create1(0);
     if (reactor.socket_epoll_fd == -1) {
@@ -150,7 +142,7 @@ static struct loop_core create_reactor(char* addr, char* port) {
     reactor.listen_fd_ctx = (struct yta_ctx*)calloc(1, sizeof(struct yta_ctx));
     listen_event.data.ptr = reactor.listen_fd_ctx;
     reactor.listen_fd_ctx->fd = reactor.listen_fd;
-    status = epoll_ctl(reactor.socket_epoll_fd, EPOLL_CTL_ADD, reactor.listen_fd,
+    int status = epoll_ctl(reactor.socket_epoll_fd, EPOLL_CTL_ADD, reactor.listen_fd,
                        &listen_event);
     if (status == -1) {
         perror("error adding listen_fd to epoll set");
@@ -441,8 +433,8 @@ static void serve_sockets(struct loop_core* reactor, struct epoll_event* events,
     }
 }
 
-static void serve(char* addr, char* port, yta_callback accept_callback) {
-    struct loop_core reac = create_reactor(addr, port);
+static void serve(int listen_fd, yta_callback accept_callback) {
+    struct loop_core reac = create_reactor(listen_fd);
     struct loop_core* reactor = &reac;
 
     const int MAX_EVENT_COUNT = 1024;
@@ -542,7 +534,24 @@ void yta_run(char* addr, char* port, char* pidfile_path, yta_callback accept_cal
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);
-    yta_fork_workers(4, pidfile_path);
 
-    serve(addr, port, accept_callback);
+    const int worker_count = 4;
+    int* listen_fds = malloc(worker_count * sizeof(int));
+
+    for (int i = 0; i < worker_count; ++i) {
+        listen_fds[i] = make_listen_socket(addr, port);
+        set_nonblock(listen_fds[i]);
+
+        int status = listen(listen_fds[i], SOMAXCONN);
+        if (status == -1) {
+            perror("error on listening");
+            exit(1);
+        }
+    }
+
+    int worker_id = yta_fork_workers(worker_count, pidfile_path);
+
+    serve(listen_fds[worker_id], accept_callback);
+
+    free(listen_fds);
 }

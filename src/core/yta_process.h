@@ -8,7 +8,7 @@ extern "C" {
 
 void signal_handler(int /* signo */);
 
-void yta_fork_workers(int workers, char* pidfile_path);
+int yta_fork_workers(int workers, char* pidfile_path);
 
 #ifdef __cplusplus
 }

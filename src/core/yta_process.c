@@ -60,7 +60,7 @@ void write_pidfile(char* pidfile_path) {
     fclose(pidfile);
 }
 
-void yta_fork_workers(int workers, char* pidfile_path) {
+int yta_fork_workers(int workers, char* pidfile_path) {
     write_pidfile(pidfile_path);
 
     worker_count = workers;
@@ -72,6 +72,8 @@ void yta_fork_workers(int workers, char* pidfile_path) {
     }
 
     pid_t worker_pid = 0;
+
+    int worker_id = -1;
 
     // spawn initial worker set
     for (int i = 0; i < workers; i++) {
@@ -85,6 +87,7 @@ void yta_fork_workers(int workers, char* pidfile_path) {
         if (worker_pid == 0) {
             signal(SIGTERM, SIG_DFL);
             signal(SIGQUIT, SIG_DFL);
+            worker_id = i;
             break;
         } else {
             worker_pids[i] = worker_pid;
@@ -119,4 +122,6 @@ void yta_fork_workers(int workers, char* pidfile_path) {
             }
         }
     }
+
+    return worker_id;
 }
