@@ -363,6 +363,7 @@ static int write_loop(struct yta_ctx* udata) {
 
     return status;
 }
+
 static void serve_timers(struct loop_core* reactor, struct epoll_event* events,
                                 const int MAX_EVENT_COUNT) {
     int event_count = epoll_wait(reactor->timer_epoll_fd, events, MAX_EVENT_COUNT, -1);
@@ -456,10 +457,10 @@ static void serve(int listen_fd, yta_callback accept_callback) {
         } else if (master_event.data.fd == reactor->timer_epoll_fd) {
             serve_timers(reactor, events, MAX_EVENT_COUNT);
         } else if (master_event.data.fd == reactor->signal_fd) {
-            printf("Worker ordered to terminate, closing listening socket ...\n");
+            printf("Worker ordered to terminate");
             terminated = 1;
-            close(reactor->listen_fd);
             free(reactor->listen_fd_ctx);
+            // TODO: close and clean up other stuff that's missing
         }
     }
 
@@ -528,28 +529,37 @@ void yta_set_close_callback(struct yta_ctx* ctx, yta_callback callback) {
     ctx->close_callback = callback;
 }
 
-void yta_run(char* addr, char* port, char* pidfile_path, yta_callback accept_callback) {
-    // TODO: replace with sigaction usage
-    signal(SIGPIPE, SIG_IGN);
-    signal(SIGTERM, signal_handler);
-    signal(SIGINT, signal_handler);
-    signal(SIGQUIT, signal_handler);
+int* get_listen_fds(int worker_count, char* addr, char* port) {
+    char* listen_fds_env = getenv("listen_fds");
 
-    const int worker_count = 4;
-    int* listen_fds = malloc(worker_count * sizeof(int));
+    if (listen_fds_env == NULL) {
+        printf("creating new fd set\n");
+        int* listen_fds = malloc(worker_count * sizeof(int));
 
-    for (int i = 0; i < worker_count; ++i) {
-        listen_fds[i] = make_listen_socket(addr, port);
-        set_nonblock(listen_fds[i]);
+        for (int i = 0; i < worker_count; ++i) {
+            listen_fds[i] = make_listen_socket(addr, port);
+            set_nonblock(listen_fds[i]);
 
-        int status = listen(listen_fds[i], SOMAXCONN);
-        if (status == -1) {
-            perror("error on listening");
-            exit(1);
+            int status = listen(listen_fds[i], SOMAXCONN);
+            if (status == -1) {
+                perror("error on listening");
+                exit(1);
+            }
         }
-    }
 
-    int worker_id = yta_fork_workers(worker_count, pidfile_path);
+        return listen_fds;
+    } else {
+        printf("parsing existing fd set\n");
+        return parse_listen_fds_env(listen_fds_env, worker_count);
+    }
+}
+
+void yta_run(char** argv, char* addr, char* port, char* pidfile_path, yta_callback accept_callback) {
+    const int worker_count = 4;
+
+    int* listen_fds = get_listen_fds(worker_count, addr, port);
+
+    int worker_id = yta_fork_workers(worker_count, pidfile_path, argv, listen_fds);
 
     serve(listen_fds[worker_id], accept_callback);
 

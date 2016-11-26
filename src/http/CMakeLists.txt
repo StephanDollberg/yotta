@@ -9,3 +9,5 @@ enable_testing()
 add_subdirectory(test)
 
 add_test(NAME http_test COMMAND http_test)
+
+install(TARGETS http DESTINATION /usr/local/lib)

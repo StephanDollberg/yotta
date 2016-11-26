@@ -14,6 +14,9 @@
 pid_t* worker_pids = NULL;
 sig_atomic_t worker_count = 0;
 char* pidfile_to_delete = NULL;
+char** stored_argv = NULL;
+int* stored_listen_fds = NULL;
+int upgraded = 0;
 
 void forward_signal_to_workers(int signo) {
     if (worker_pids != NULL) {
@@ -23,19 +26,113 @@ void forward_signal_to_workers(int signo) {
     }
 }
 
-void signal_handler(int signo) {
-    forward_signal_to_workers(signo);
+char* create_listen_fds_env(int* listen_fds, int worker_count) {
+    // max size per pid is 5, worker_count pids and worker_count - 1 spaces
+    size_t buf_size = sizeof("listen_fds=") + worker_count * 5 + worker_count - 1;
+    char* buf = calloc(buf_size, 1);
+
+    char* cur = buf;
+    cur += sprintf(cur, "listen_fds=");
+    for (int i = 0; i < worker_count - 1; i++) {
+        int plus = sprintf(cur, "%d ", listen_fds[i]);
+        cur = cur + plus;
+    }
+    cur += sprintf(cur, "%d", listen_fds[worker_count - 1]);
+
+    return buf;
+}
+
+int* parse_listen_fds_env(char* listen_fds_env, int fd_count) {
+    int* listen_fds = malloc(fd_count * sizeof(int));
+    char* iter = listen_fds_env;
+    char* cur = listen_fds_env;
+
+    int fd_iter = 0;
+    while (*cur != '\0') {
+        while (*cur != '\0' && *cur != ' ') {
+            ++cur;
+        }
+
+        int fd = atoi(iter);
+
+        listen_fds[fd_iter] = fd;
+
+        ++fd_iter;
+
+        if (*cur == '\0') {
+            break;
+        }
+
+        ++cur;
+        iter = cur;
+    }
+
+    return listen_fds;
+}
+
+void exit_and_cleanup_main(int signo) {
     if (worker_pids != NULL) {
         free(worker_pids);
     }
 
     remove(pidfile_to_delete);
 
+    if (upgraded) {
+        free(pidfile_to_delete);
+    }
+
     if (signo == SIGQUIT) {
         exit(0);
     } else {
         exit(1);
     }
+}
+
+void signal_handler(int signo) {
+    forward_signal_to_workers(signo);
+
+    for (int i = 0; i < worker_count; ++i) {
+        waitpid(worker_pids[i], NULL, 0);
+    }
+
+    exit_and_cleanup_main(signo);
+}
+
+void upgrade_handler(int signo) {
+    printf("upgrading handler triggered\n");
+    (void)signo;
+
+    const char* old_pid = ".old";
+    size_t current_len = strlen(pidfile_to_delete);
+    char* new_name = calloc(current_len + sizeof(old_pid) - 1, 1);
+
+    sprintf(new_name, "%s%s", pidfile_to_delete, old_pid);
+
+    rename(pidfile_to_delete, new_name);
+    pidfile_to_delete = new_name;
+
+    char* buf = create_listen_fds_env(stored_listen_fds, worker_count);
+    char* const envp[] = { buf, NULL };
+
+    upgraded = 1;
+
+    pid_t pid = fork();
+
+    if (pid == -1) {
+        perror("failed to fork for new binary");
+        return;
+    }
+
+    if (pid == 0) {
+        int status = execve(stored_argv[0], stored_argv, envp );
+
+        if (status == -1) {
+            perror("Failed to execve");
+            exit(1);
+        }
+    }
+
+    free(buf);
 }
 
 void write_pidfile(char* pidfile_path) {
@@ -60,11 +157,20 @@ void write_pidfile(char* pidfile_path) {
     fclose(pidfile);
 }
 
-int yta_fork_workers(int workers, char* pidfile_path) {
+int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_fds) {
+    // TODO: replace with sigaction usage
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGTERM, signal_handler);
+    signal(SIGINT, signal_handler);
+    signal(SIGQUIT, signal_handler);
+    signal(SIGUSR1, upgrade_handler);
+
     write_pidfile(pidfile_path);
 
     worker_count = workers;
     worker_pids = (pid_t*)malloc(workers * sizeof(pid_t));
+    stored_argv = argv;
+    stored_listen_fds = listen_fds;
 
     if (worker_pids == NULL) {
         fprintf(stderr, "can't malloc worker worker_pids");
@@ -87,6 +193,7 @@ int yta_fork_workers(int workers, char* pidfile_path) {
         if (worker_pid == 0) {
             signal(SIGTERM, SIG_DFL);
             signal(SIGQUIT, SIG_DFL);
+            signal(SIGINT, SIG_DFL);
             worker_id = i;
             break;
         } else {
@@ -94,16 +201,19 @@ int yta_fork_workers(int workers, char* pidfile_path) {
         }
     }
 
-
     // wait for children and restart workers
     while (worker_pid != 0) {
         int status = 0;
         int pid = waitpid(-1, &status, 0);
 
-        fprintf(stderr, "worker died: %d\n", pid);
+        if (pid == -1) {
+            perror("waitpid failed while in worker respawner");
+        }
+
+        fprintf(stderr, "worker died: %d status: %d\n", pid, WIFEXITED(status));
 
         for (int i = 0; i < workers; i++) {
-            if (pid == worker_pids[i]) {
+            if (pid == worker_pids[i] && !upgraded) {
                 worker_pid = fork();
 
                 if (worker_pid == -1) {

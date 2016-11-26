@@ -5,6 +5,8 @@ set (CMAKE_C_FLAGS "--std=gnu11 -g -O3 -Wall -Werror -Wextra -pedantic -fsanitiz
 
 add_library(core SHARED yta_event_loop.c yta_process.c)
 
-#enable_testing()
-#add_subdirectory(test)
-#add_test(NAME core_test COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/test/core_test.sh)
+enable_testing()
+add_subdirectory(test)
+add_test(NAME core_test COMMAND core_test)
+
+install(TARGETS core DESTINATION /usr/local/lib)

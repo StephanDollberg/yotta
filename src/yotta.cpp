@@ -379,9 +379,7 @@ int main(int argc, char** argv) {
         pidfile_path = argv[3];
     }
 
-    yta_run(argv[1], argv[2], pidfile_path, accept_callback_http);
-
-    std::remove(pidfile_path);
+    yta_run(argv, argv[1], argv[2], pidfile_path, accept_callback_http);
 
     return 0;
 }

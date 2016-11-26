@@ -13,4 +13,3 @@ target_link_libraries(yotta core http)
 enable_testing()
 
 install(TARGETS yotta DESTINATION /usr/local/bin)
-
