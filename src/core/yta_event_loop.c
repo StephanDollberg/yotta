@@ -435,8 +435,7 @@ static void serve_sockets(struct loop_core* reactor, struct epoll_event* events,
 }
 
 static void serve(int listen_fd, yta_callback accept_callback) {
-    struct loop_core reac = create_reactor(listen_fd);
-    struct loop_core* reactor = &reac;
+    struct loop_core reactor = create_reactor(listen_fd);
 
     const int MAX_EVENT_COUNT = 1024;
     struct epoll_event events[MAX_EVENT_COUNT];
@@ -445,28 +444,28 @@ static void serve(int listen_fd, yta_callback accept_callback) {
 
     int terminated = 0;
 
-    while (!terminated || reactor->current_clients) {
+    while (!terminated || reactor.current_clients) {
         // we only extract a single event as the socket and timer events can
         // influence
         // each other (remove fds from the other epoll set)
         // and such make the inner epoll_wait block
-        epoll_wait(reactor->master_epoll_fd, &master_event, 1, -1);
+        epoll_wait(reactor.master_epoll_fd, &master_event, 1, -1);
 
-        if (master_event.data.fd == reactor->socket_epoll_fd) {
-            serve_sockets(reactor, events, MAX_EVENT_COUNT, accept_callback);
-        } else if (master_event.data.fd == reactor->timer_epoll_fd) {
-            serve_timers(reactor, events, MAX_EVENT_COUNT);
-        } else if (master_event.data.fd == reactor->signal_fd) {
+        if (master_event.data.fd == reactor.socket_epoll_fd) {
+            serve_sockets(&reactor, events, MAX_EVENT_COUNT, accept_callback);
+        } else if (master_event.data.fd == reactor.timer_epoll_fd) {
+            serve_timers(&reactor, events, MAX_EVENT_COUNT);
+        } else if (master_event.data.fd == reactor.signal_fd) {
             printf("Worker ordered to terminate");
             terminated = 1;
-            free(reactor->listen_fd_ctx);
+            free(reactor.listen_fd_ctx);
         }
     }
 
-    close(reac.socket_epoll_fd);
-    close(reac.timer_epoll_fd);
-    close(reac.signal_fd);
-    close(reac.master_epoll_fd);
+    close(reactor.socket_epoll_fd);
+    close(reactor.timer_epoll_fd);
+    close(reactor.signal_fd);
+    close(reactor.master_epoll_fd);
 
     printf("Worker terminated\n");
 }
