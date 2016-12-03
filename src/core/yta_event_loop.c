@@ -460,9 +460,13 @@ static void serve(int listen_fd, yta_callback accept_callback) {
             printf("Worker ordered to terminate");
             terminated = 1;
             free(reactor->listen_fd_ctx);
-            // TODO: close and clean up other stuff that's missing
         }
     }
+
+    close(reac.socket_epoll_fd);
+    close(reac.timer_epoll_fd);
+    close(reac.signal_fd);
+    close(reac.master_epoll_fd);
 
     printf("Worker terminated\n");
 }
