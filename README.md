@@ -1,18 +1,19 @@
 ## Yotta
 
-Yotta is basic http file server. It serves my personal blog [dollberg.xyz](http://dollberg.xyz).
+Yotta is basic http file server. It serves my personal blog [dollberg.xyz](https://dollberg.xyz).
 
-It's main purpose is though to build an epoll based event loop with all kinds of gimmicks.
+It's main purpose is though to build an epoll based event loop with all kinds of gimmicks. In addition, it's a performant file server that doesn't need 50 lines of config.
 
 Current HTTP Features:
  - If-Modified-Since
  - (Essential) Range Support
 
 Event loop:
- - Edge triggered `epoll`
- - Worker Processes (connections loadbalanced via `REUSEPORT`)
- - timers via `timerfd`
- - `sendfile`
+ - Edge triggered `epoll` loop
+ - Connections loadbalanced via `REUSEPORT` to worker processes
+ - Timers via `timerfd`
+ - Files are served directly via `sendfile`
+ - Zero down time upgrades (same principle as nginx)
 
 ### Building
 
