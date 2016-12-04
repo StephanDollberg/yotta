@@ -360,7 +360,7 @@ yta_callback_status accept_callback_http(struct yta_ctx* ctx) {
     struct user_data* udata = new user_data;
     ctx->user_data = udata;
     yta_set_close_callback(ctx, http_cleanup);
-    yta_async_timer(ctx, timer_callback, 15, 0);
+    yta_async_timer(ctx, timer_callback, 300, 0);
     accept_logic(ctx, udata);
     return YTA_OK;
 }
