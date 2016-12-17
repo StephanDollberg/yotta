@@ -140,6 +140,10 @@ static struct loop_core create_reactor(int listen_fd) {
     struct epoll_event listen_event;
     listen_event.events = EPOLLIN | EPOLLET;
     reactor.listen_fd_ctx = (struct yta_ctx*)calloc(1, sizeof(struct yta_ctx));
+    if (reactor.listen_fd_ctx == NULL) {
+        fprintf(stderr, "failed to allocate mem for listenfd ctx, aborting");
+        exit(1);
+    }
     listen_event.data.ptr = reactor.listen_fd_ctx;
     reactor.listen_fd_ctx->fd = reactor.listen_fd;
     int status = epoll_ctl(reactor.socket_epoll_fd, EPOLL_CTL_ADD, reactor.listen_fd,
@@ -254,8 +258,19 @@ static void accept_loop(struct loop_core* reactor, yta_callback accept_callback,
         }
 
         struct yta_ctx* udata = (struct yta_ctx*)calloc(1, sizeof(struct yta_ctx));
+        if (udata == NULL) {
+            fprintf(stderr, "failed to allocate mem for context, continueing");
+            close(infd);
+            continue;
+        }
         udata->fd = infd;
         udata->reactor = reactor;
+
+        yta_callback_status callback_status = accept_callback(udata);
+        if (callback_status == YTA_EXIT) {
+            free(udata);
+            continue;
+        }
 
         struct epoll_event event;
         event.data.ptr = udata;
@@ -265,8 +280,6 @@ static void accept_loop(struct loop_core* reactor, yta_callback accept_callback,
             fprintf(stderr, "error adding accepted socket to epoll loop");
             exit(1);
         }
-
-        accept_callback(udata);
 
         ++reactor->current_clients;
     }
@@ -537,7 +550,11 @@ int* get_listen_fds(int worker_count, char* addr, char* port) {
 
     if (listen_fds_env == NULL) {
         printf("creating new fd set\n");
-        int* listen_fds = malloc(worker_count * sizeof(int));
+        int* listen_fds = calloc(worker_count, sizeof(int));
+        if (listen_fds == NULL) {
+            fprintf(stderr, "failed to allocated mem for listen fds, aborting ...");
+            exit(1);
+        }
 
         for (int i = 0; i < worker_count; ++i) {
             listen_fds[i] = make_listen_socket(addr, port);

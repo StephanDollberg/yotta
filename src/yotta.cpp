@@ -358,6 +358,9 @@ void accept_logic(yta_ctx* ctx, struct user_data* udata) {
 
 yta_callback_status accept_callback_http(struct yta_ctx* ctx) {
     struct user_data* udata = new user_data;
+    if (udata == nullptr) {
+        return YTA_EXIT;
+    }
     ctx->user_data = udata;
     yta_set_close_callback(ctx, http_cleanup);
     yta_async_timer(ctx, timer_callback, 300, 0);

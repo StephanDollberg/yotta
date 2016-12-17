@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 $(which yotta) "::" 10000 /tmp/yotta_update_test.pid &
 pid=$!
 sleep 1

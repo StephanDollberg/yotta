@@ -29,7 +29,11 @@ void forward_signal_to_workers(int signo) {
 char* create_listen_fds_env(int* listen_fds, int worker_count) {
     // max size per pid is 5, worker_count pids and worker_count - 1 spaces
     size_t buf_size = sizeof("listen_fds=") + worker_count * 5 + worker_count - 1;
-    char* buf = calloc(buf_size, 1);
+    char* buf = calloc(1, buf_size);
+    if (buf == NULL) {
+        fprintf(stderr, "failed to allocated mem for listen fds, aborting ...");
+        exit(1);
+    }
 
     char* cur = buf;
     cur += sprintf(cur, "listen_fds=");
@@ -43,7 +47,11 @@ char* create_listen_fds_env(int* listen_fds, int worker_count) {
 }
 
 int* parse_listen_fds_env(char* listen_fds_env, int fd_count) {
-    int* listen_fds = malloc(fd_count * sizeof(int));
+    int* listen_fds = calloc(fd_count, sizeof(int));
+    if (listen_fds == NULL) {
+        fprintf(stderr, "failed to allocated mem for listen fds, aborting ...");
+        exit(1);
+    }
     char* iter = listen_fds_env;
     char* cur = listen_fds_env;
 
@@ -104,7 +112,11 @@ void upgrade_handler(int signo) {
 
     const char* old_pid = ".old";
     size_t current_len = strlen(pidfile_to_delete);
-    char* new_name = calloc(current_len + sizeof(old_pid) - 1, 1);
+    char* new_name = calloc(1, current_len + sizeof(old_pid) - 1);
+    if (new_name == NULL) {
+        fprintf(stderr, "failed to alloc mem on upgrade");
+        return;
+    }
 
     sprintf(new_name, "%s%s", pidfile_to_delete, old_pid);
 
@@ -168,12 +180,12 @@ int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_f
     write_pidfile(pidfile_path);
 
     worker_count = workers;
-    worker_pids = (pid_t*)malloc(workers * sizeof(pid_t));
+    worker_pids = (pid_t*)calloc(workers, sizeof(pid_t));
     stored_argv = argv;
     stored_listen_fds = listen_fds;
 
     if (worker_pids == NULL) {
-        fprintf(stderr, "can't malloc worker worker_pids");
+        fprintf(stderr, "can't calloc worker worker_pids");
         exit(1);
     }
 
