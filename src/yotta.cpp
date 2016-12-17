@@ -248,11 +248,7 @@ int parse_headers(yta_ctx* ctx) {
     }
 
     if (!udata->finalized) {
-        auto end = yta::http::serve_200(udata->response_buf, udata->file_size,
-                                        &udata->file_stat.st_mtime, udata->extension);
-        udata->response_size = end - udata->response_buf;
-        udata->content = true;
-        udata->finalized = true;
+        return_404(udata);
     }
     return 0;
 }
@@ -304,7 +300,7 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
     if (parsed == -1) {
         return_400(udata);
     } else if (parsed > 0) {
-        parse_url(ctx, udata->parser.path, udata->parser.path_len);
+        //parse_url(ctx, udata->parser.path, udata->parser.path_len);
         parse_headers(ctx);
     }
 
