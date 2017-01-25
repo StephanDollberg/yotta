@@ -574,7 +574,11 @@ int* get_listen_fds(int worker_count, char* addr, char* port) {
     }
 }
 
-void yta_run(char** argv, char* addr, char* port, char* pidfile_path, yta_callback accept_callback) {
+void yta_run(char** argv, char* addr, char* port, char* pidfile_path, int daemonize, yta_callback accept_callback) {
+    if (daemonize) {
+        yta_daemonize();
+    }
+
     const int worker_count = 4;
 
     int* listen_fds = get_listen_fds(worker_count, addr, port);

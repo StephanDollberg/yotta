@@ -107,6 +107,7 @@ void signal_handler(int signo) {
 }
 
 void upgrade_handler(int signo) {
+    // TODO check for upgraded
     printf("upgrading handler triggered\n");
     (void)signo;
 
@@ -222,6 +223,7 @@ int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_f
             perror("waitpid failed while in worker respawner");
         }
 
+        // TODO check for upgraded
         fprintf(stderr, "worker died: %d status: %d\n", pid, WIFEXITED(status));
 
         for (int i = 0; i < workers; i++) {
@@ -246,4 +248,25 @@ int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_f
     }
 
     return worker_id;
+}
+
+void yta_daemonize() {
+    pid_t pid = fork();
+
+    switch (pid) {
+        case 0: {
+            break;
+        }
+        case -1: {
+            fprintf(stderr, "failed daemonizing, exiting");
+        }
+        default: {
+            exit(0);
+        }
+    }
+
+    if (setsid() == -1) {
+        perror("failed setsid in daemon, exiting daemon");
+        exit(1);
+    }
 }

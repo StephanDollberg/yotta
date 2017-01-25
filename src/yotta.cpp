@@ -377,12 +377,18 @@ int main(int argc, char** argv) {
 
     char default_pidfile[] =  { "/tmp/yotta.pid" };
     char* pidfile_path = default_pidfile;
+    int daemonize = 0;
 
     if (argc == 4) {
         pidfile_path = argv[3];
     }
 
-    yta_run(argv, argv[1], argv[2], pidfile_path, accept_callback_http);
+    if (argc == 5) {
+        pidfile_path = argv[3];
+        daemonize = atoi(argv[4]);
+    }
+
+    yta_run(argv, argv[1], argv[2], pidfile_path, daemonize, accept_callback_http);
 
     return 0;
 }
