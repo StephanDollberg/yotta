@@ -1,0 +1,15 @@
+[Unit]
+Description=The yotta fileserver
+After=syslog.target network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=forking
+PIDFile=/run/yotta.pid
+WorkingDirectory=/file/dir/
+ExecStart=/usr/local/bin/yotta :: 80 /run/yotta.pid 1
+ExecReload=/usr/local/bin/upgrade_yotta.sh /run/yotta.pid
+ExecStop=/bin/kill -s SIGQUIT $MAINPID
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
