@@ -170,7 +170,26 @@ void write_pidfile(char* pidfile_path) {
     fclose(pidfile);
 }
 
+void clear_sigmask() {
+    int status = 0;
+    sigset_t signal_set;
+    status = sigemptyset(&signal_set);
+
+    if (status == -1) {
+        perror("error initializing signal set");
+        exit(1);
+    }
+
+    status = sigprocmask(SIG_SETMASK, &signal_set, NULL);
+    if (status == -1) {
+        perror("error setting sigprocmask");
+        exit(1);
+    }
+}
+
 int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_fds) {
+    clear_sigmask();
+
     // TODO: replace with sigaction usage
     signal(SIGPIPE, SIG_IGN);
     signal(SIGTERM, signal_handler);
