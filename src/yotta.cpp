@@ -41,13 +41,13 @@ struct user_data {
 
     bool finalized;
 
-    int response_size;
+    size_t response_size;
     bool content;
     std::experimental::string_view extension;
 
     int file_fd;
-    int file_size;
-    int offset = 0;
+    size_t file_size;
+    size_t offset = 0;
 
     parser_data parser;
 

@@ -9,10 +9,10 @@
 namespace yta {
 namespace http {
 
-char* serve_200(char* buf, int content_length, time_t* last_modified, std::experimental::string_view extension);
+char* serve_200(char* buf, std::size_t content_length, time_t* last_modified, std::experimental::string_view extension);
 
-char* serve_206(char* buf, int content_length,
-                time_t* last_modified, int range_start, int range_end, int file_size);
+char* serve_206(char* buf, std::size_t content_length,
+                time_t* last_modified, std::size_t range_start, std::size_t range_end, std::size_t file_size);
 
 char* serve_304(char* buf);
 
