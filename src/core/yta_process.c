@@ -100,6 +100,8 @@ void signal_handler(int signo) {
     forward_signal_to_workers(signo);
 
     for (int i = 0; i < worker_count; ++i) {
+        // we don't really care about return value here
+        // workers have to die anyway
         waitpid(worker_pids[i], NULL, 0);
     }
 
@@ -121,7 +123,10 @@ void upgrade_handler(int signo) {
 
     sprintf(new_name, "%s%s", pidfile_to_delete, old_pid);
 
-    rename(pidfile_to_delete, new_name);
+    if (rename(pidfile_to_delete, new_name)) {
+        fprintf(stderr, "failed to rename pid file, aborting upgrade");
+        return;
+    }
     pidfile_to_delete = new_name;
 
     char* buf = create_listen_fds_env(stored_listen_fds, worker_count);
