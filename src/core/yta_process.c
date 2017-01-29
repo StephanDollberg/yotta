@@ -262,6 +262,8 @@ int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_f
                 if (worker_pid == 0) {
                     signal(SIGTERM, SIG_DFL);
                     signal(SIGQUIT, SIG_DFL);
+                    signal(SIGINT, SIG_DFL);
+                    worker_id = i;
                 } else {
                     worker_pids[i] = worker_pid;
                 }
