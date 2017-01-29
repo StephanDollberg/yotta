@@ -212,13 +212,15 @@ bool handle_range(yta_ctx* ctx, std::experimental::string_view value) {
         return true;
     }
 
+    // TODO: think of something smarter to not create temp std::string
+    // boost::lexical_cast would work
     auto val = std::string(iter, sep);
     int start_value = std::stoi(val);
     int end_value = 0;
 
-    if (std::next(sep, 1) == value.end()) {
+    if (std::next(sep, 1) == value.end()) { // Range: bytes=123-
         end_value = udata->file_stat.st_size - 1;
-    } else {
+    } else { // Range: bytes=123-200
         auto val = std::string(sep + 1, value.end());
         end_value = std::stoi(val);
     }
