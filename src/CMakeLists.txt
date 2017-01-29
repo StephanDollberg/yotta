@@ -12,4 +12,8 @@ target_link_libraries(yotta core http)
 
 enable_testing()
 
+add_test(NAME integration_test
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/run_integration_test.sh $<TARGET_FILE:yotta>
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/test/)
+
 install(TARGETS yotta DESTINATION /usr/local/bin)
