@@ -4,21 +4,7 @@
 #include <cstddef>
 #include <vector>
 #include <unordered_map>
-
-#include <errno.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include <sys/epoll.h>
-#include <sys/sendfile.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
-#include <unistd.h>
+#include <ctime>
 
 namespace yta {
 namespace http {
@@ -38,10 +24,10 @@ char* serve_200(char* buf, std::size_t content_length, time_t* last_modified, st
 
     buf = std::copy(base_buf, base_buf + base_buf_size, buf);
     buf = std::copy(last_modified_buf, last_modified_buf + last_modified_size, buf);
-    buf += strftime(buf, 512, http_time_format(), gmtime(last_modified));
+    buf += std::strftime(buf, 512, http_time_format(), gmtime(last_modified));
     buf = std::copy(content_length_buf, content_length_buf + content_length_buf_size,
                        buf);
-    buf += sprintf(buf, "%lu", content_length);
+    buf += std::sprintf(buf, "%lu", content_length);
     buf = std::copy(content_type_buf, content_type_buf + content_type_buf_size,
                        buf);
     buf = std::copy(content_type.begin(), content_type.end(), buf);
@@ -76,16 +62,16 @@ char* serve_206(char* buf, std::size_t content_length,
 
     buf = std::copy(last_modified_buf, last_modified_buf + last_modified_size, buf);
     buf +=
-        strftime(buf, 512, http_time_format(), gmtime(last_modified));
+        std::strftime(buf, 512, http_time_format(), gmtime(last_modified));
     buf = std::copy(content_range_buf, content_range_buf + content_range_buf_size, buf);
-    buf += sprintf(buf, "%lu", range_start);
+    buf += std::sprintf(buf, "%lu", range_start);
     *(buf++) = '-';
-    buf += sprintf(buf, "%lu", range_end);
+    buf += std::sprintf(buf, "%lu", range_end);
     *buf++ = '/';
-    buf += sprintf(buf, "%lu", file_size);
+    buf += std::sprintf(buf, "%lu", file_size);
     buf = std::copy(content_length_buf, content_length_buf + content_length_buf_size,
                        buf);
-    buf += sprintf(buf, "%lu", content_length);
+    buf += std::sprintf(buf, "%lu", content_length);
 
     buf = std::copy(linefeed, linefeed + 4, buf);
 

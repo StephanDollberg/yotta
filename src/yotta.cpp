@@ -5,12 +5,10 @@
 
 #include <fcntl.h>
 #include <netdb.h>
-#include <stdio.h>
-#include <string.h>
+#include <netinet/tcp.h>
 
 #include <sys/stat.h>
 #include <unistd.h>
-#include <netinet/tcp.h>
 
 #include "core/yta_event_loop.h"
 #include "http/yta_http.hpp"
@@ -41,13 +39,13 @@ struct user_data {
 
     bool finalized;
 
-    size_t response_size;
+    std::size_t response_size;
     bool content;
     std::experimental::string_view extension;
 
     int file_fd;
-    size_t file_size;
-    size_t offset = 0;
+    std::size_t file_size;
+    std::size_t offset = 0;
 
     parser_data parser;
 
@@ -172,7 +170,7 @@ bool handle_range(yta_ctx* ctx, const char* value, std::size_t value_length) {
         return true;
     }
 
-    if (memcmp(value, "bytes=", 6) != 0) {
+    if (!std::equal(value, value + 6, "bytes=")) {
         return_400(udata);
         return true;
     }
@@ -260,7 +258,7 @@ int parse_headers(yta_ctx* ctx) {
 void accept_logic(struct yta_ctx* ctx, struct user_data* udata);
 
 yta_callback_status http_finish_callback(struct yta_ctx* ctx, void*, size_t) {
-    struct user_data* udata = (struct user_data*)ctx->user_data;
+    struct user_data* udata = static_cast<user_data*>(ctx->user_data);
 
     if (udata->file_fd != 0) {
         close(udata->file_fd);
@@ -331,7 +329,7 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
 }
 
 yta_callback_status http_cleanup(struct yta_ctx* ctx) {
-    struct user_data* udata = (struct user_data*)ctx->user_data;
+    struct user_data* udata = static_cast<struct user_data*>(ctx->user_data);
 
     if (udata->file_fd != 0) {
         close(udata->file_fd);

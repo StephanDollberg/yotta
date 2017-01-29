@@ -57,11 +57,11 @@ def main():
     sess = requests.session()
 
     resp = sess.get(base + '/404')
-    assert resp.status_code == 404 
+    assert resp.status_code == 404
     assert resp.text == ''
 
     resp = sess.get(base + '/404')
-    assert resp.status_code == 404 
+    assert resp.status_code == 404
     assert resp.text == ''
 
 
@@ -69,11 +69,11 @@ def main():
     sess = requests.session()
 
     resp = sess.get(base + '/404')
-    assert resp.status_code == 404 
+    assert resp.status_code == 404
     assert resp.text == ''
 
     resp = sess.get(base + '/hello.html')
-    assert resp.status_code == 200 
+    assert resp.status_code == 200
     assert resp.text == 'hello world'
 
 
@@ -81,16 +81,16 @@ def main():
 
     # modified since test
     resp = sess.get(base + '/hello.html')
-    assert resp.status_code == 200 
+    assert resp.status_code == 200
     assert resp.text == 'hello world'
     assert 'Last-Modified' in resp.headers
 
-    resp = sess.get(base + '/hello.html', 
+    resp = sess.get(base + '/hello.html',
         headers={'If-Modified-Since': resp.headers['Last-Modified']})
-    assert resp.status_code == 304 
+    assert resp.status_code == 304
     assert resp.text == ''
-    
-    
+
+
 
     # normalization integration test
     resp = requests.get(base + '/../../../../../../../../etc/passwd')
@@ -98,7 +98,7 @@ def main():
 
 
     # range test
-    resp = sess.get(base + '/hello.html', 
+    resp = sess.get(base + '/hello.html',
         headers={'Range': 'bytes=2-3'})
     assert resp.status_code == 206
     assert resp.text == 'll'
@@ -109,13 +109,13 @@ def main():
     # > max buffer size
     resp = requests.get(base + '/hello.html', headers = {'foo': 'A' * 1024})
     assert resp.status_code == 400
-    
+
     # fuzz
     for _ in range(100):
         resp = requests.get(base + '/hello.html')
         assert resp.status_code == 200
         assert resp.text == 'hello world'
-        
+
 
 if __name__ == '__main__':
     main()
