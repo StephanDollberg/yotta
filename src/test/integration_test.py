@@ -32,12 +32,12 @@ class IntegrationTest(unittest.TestCase):
         resp = requests.get(base + '/noending')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.text, 'noending')
-        self.assertEqual(resp.headers['Content-Type'], 'text/html')
+        self.assertEqual(resp.headers['Content-Type'], 'text/plain')
 
         resp = requests.get(base + '/foo.unknown')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.text, 'foo')
-        self.assertEqual(resp.headers['Content-Type'], 'text/html')
+        self.assertEqual(resp.headers['Content-Type'], 'text/plain')
 
         resp = requests.get(base + '/subdir/')
         self.assertEqual(resp.status_code, 200)

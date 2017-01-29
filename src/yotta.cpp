@@ -131,18 +131,19 @@ int parse_url(yta_ctx* ctx, const char* path, size_t length) {
     }
 
     std::experimental::string_view path_view(normalized_path, new_length);
-    auto path_begin = path_view.rfind('.');
+    auto filetype_begin = path_view.rfind('.');
+    auto file_begin = path_view.rfind('/');
 
     // we always find . at the beginning because of ./FILENAME
-    if (path_begin != 0) {
-        auto it = mime_types.find(path_view.substr(path_begin));
+    if (file_begin < filetype_begin) {
+        auto it = mime_types.find(path_view.substr(filetype_begin));
         if (it != mime_types.end()) {
             udata->extension = it->second;
         } else {
-            udata->extension = { "text/html" };
+            udata->extension = { "text/plain" };
         }
     } else {
-        udata->extension = { "text/html" };
+        udata->extension = { "text/plain" };
     }
 
     udata->file_fd = ffd;
