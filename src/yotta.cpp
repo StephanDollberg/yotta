@@ -134,13 +134,13 @@ int parse_url(yta_ctx* ctx, const char* at, size_t length) {
     return 0;
 }
 
-typedef bool (*header_handler)(yta_ctx*, const char*, std::size_t);
+typedef bool (*header_handler)(yta_ctx*, std::experimental::string_view);
 
-bool handle_if_modified_since(yta_ctx* ctx, const char* value, std::size_t) {
+bool handle_if_modified_since(yta_ctx* ctx, std::experimental::string_view value) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
     tm stamp;
-    if (strptime(value, yta::http::http_time_format(), &stamp) == NULL) {
+    if (strptime(value.data(), yta::http::http_time_format(), &stamp) == NULL) {
         auto end = yta::http::serve_400(udata->response_buf);
         udata->response_size = end - udata->response_buf;
         udata->content = false;
@@ -161,43 +161,47 @@ bool handle_if_modified_since(yta_ctx* ctx, const char* value, std::size_t) {
     return false;
 }
 
-bool handle_range(yta_ctx* ctx, const char* value, std::size_t value_length) {
+bool handle_range(yta_ctx* ctx, std::experimental::string_view value) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
     // 7 bytes=X-
-    if (value_length < 8) {
+    if (value.size() < 8) {
         return_400(udata);
         return true;
     }
 
-    if (!std::equal(value, value + 6, "bytes=")) {
+    auto iter = value.begin();
+
+    if (!std::equal(iter, iter + 6, "bytes=")) {
         return_400(udata);
         return true;
     }
 
-    value = value + 6;
+    std::advance(iter, 6);
 
-    auto sep = std::find(value, value + value_length, '-');
+    auto sep = std::find(iter, value.end(), '-');
 
-    if (sep == 0) {
+    if (sep == value.end()) {
         return_400(udata);
         return true;
     }
 
-    if (sep - value == 0) {
+    // Range: bytes=-123
+    if (sep == iter) {
         // this should be supported by rfc
         return_400(udata);
         return true;
     }
 
-    *const_cast<char*>(sep) = 0; // UB
-    int start_value = std::atoi(value);
+    auto val = std::string(iter, sep);
+    int start_value = std::stoi(val);
     int end_value = 0;
 
-    if (static_cast<std::size_t>(sep - value) == value_length - 1) {
+    if (static_cast<std::size_t>(sep - iter) == value.size() - 1) {
         end_value = udata->file_stat.st_size;
     } else {
-        end_value = std::atoi(sep + 1);
+        val = std::string(sep + 1, value.end());
+        end_value = std::stoi(val);
     }
 
     if (end_value <= start_value) {
@@ -229,6 +233,7 @@ std::unordered_map<std::experimental::string_view, header_handler> header_callba
     { "If-Modified-Since", handle_if_modified_since }, { "Range", handle_range }
 };
 
+// TODO: use string_view in more cases here
 int parse_headers(yta_ctx* ctx) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
@@ -237,8 +242,9 @@ int parse_headers(yta_ctx* ctx) {
                                               udata->parser.headers[i].name_len);
         auto it = header_callbacks.find(header);
         if (it != header_callbacks.end()) {
-            auto done = it->second(ctx, udata->parser.headers[i].value,
-                                   udata->parser.headers[i].value_len);
+            std::experimental::string_view value(udata->parser.headers[i].value,
+                                                  udata->parser.headers[i].value_len);
+            auto done = it->second(ctx, value);
             if (done) {
                 return 0;
             }
