@@ -69,7 +69,10 @@ void return_404(user_data* udata) {
 std::unordered_map<std::experimental::string_view, std::experimental::string_view> mime_types {
     { ".html", "text/html" }, { ".css", "text/css" }, { ".png", "image/png"}, { ".jpg", "image/jpeg" },
     { ".jpeg", "image/jpeg"}, { ".txt", "text/plain" }, {".js", "application/x-javascript"},
-    { ".opus", "audio/opus"}
+    { ".json", "application/json"}, { ".pdf", "application/pdf" }, { ".zip", "application/zip" },
+    { ".woff", "application/font-woff" }, { ".woff2", "application/font-woff2" },
+    { ".opus", "audio/opus"}, { ".mp4", "video/mp4"}, { ".mpeg", "video/mpeg" }, { ".mpg", "video/mpeg" },
+    { ".mp3", "audio/mpeg"}
 };
 
 int parse_url(yta_ctx* ctx, const char* at, size_t length) {
@@ -79,6 +82,12 @@ int parse_url(yta_ctx* ctx, const char* at, size_t length) {
     auto pos = std::find(at, at + length, '?');
     if (pos != at + length) {
         length = pos - at;
+    }
+
+    // clean path buffer is 512, we should probably pass the buf as well
+    if (length > 500) {
+        return_404(udata);
+        return 0;
     }
 
     // clean path
@@ -204,6 +213,7 @@ bool handle_range(yta_ctx* ctx, std::experimental::string_view value) {
         end_value = std::stoi(val);
     }
 
+    // sanity checks
     if (end_value <= start_value) {
         end_value = udata->file_stat.st_size - 1;
     }
