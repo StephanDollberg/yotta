@@ -197,15 +197,15 @@ bool handle_range(yta_ctx* ctx, std::experimental::string_view value) {
     int start_value = std::stoi(val);
     int end_value = 0;
 
-    if (static_cast<std::size_t>(sep - iter) == value.size() - 1) {
-        end_value = udata->file_stat.st_size;
+    if (std::next(sep, 1) == value.end()) {
+        end_value = udata->file_stat.st_size - 1;
     } else {
-        val = std::string(sep + 1, value.end());
+        auto val = std::string(sep + 1, value.end());
         end_value = std::stoi(val);
     }
 
     if (end_value <= start_value) {
-        end_value = udata->file_stat.st_size;
+        end_value = udata->file_stat.st_size - 1;
     }
 
     if (start_value < 0) {

@@ -99,6 +99,16 @@ class IntegrationTest(unittest.TestCase):
 
 
         # range test
+        # open range
+        resp = sess.get(base + '/hello.html',
+            headers={'Range': 'bytes=2-'})
+        self.assertEqual(resp.status_code, 206)
+        self.assertEqual(resp.text, 'llo world')
+        self.assertIn('Last-Modified', resp.headers)
+        self.assertEqual(resp.headers['Content-Range'], 'bytes 2-10/11')
+        self.assertEqual(resp.headers['Content-Length'], '9')
+
+        # closed range
         resp = sess.get(base + '/hello.html',
             headers={'Range': 'bytes=2-3'})
         self.assertEqual(resp.status_code, 206)
