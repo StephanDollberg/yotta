@@ -192,15 +192,26 @@ void clear_sigmask() {
     }
 }
 
-int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_fds) {
-    clear_sigmask();
-
+void setup_master_signal_handlers() {
     // TODO: replace with sigaction usage
     signal(SIGPIPE, SIG_IGN);
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);
     signal(SIGUSR1, upgrade_handler);
+}
+
+void setup_worker_signal_handlers() {
+    // just clean master handlers here
+    signal(SIGTERM, SIG_DFL);
+    signal(SIGQUIT, SIG_DFL);
+    signal(SIGINT, SIG_DFL);
+    signal(SIGUSR1, upgrade_handler);
+}
+
+int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_fds) {
+    clear_sigmask();
+    setup_master_signal_handlers();
 
     write_pidfile(pidfile_path);
 
@@ -228,9 +239,7 @@ int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_f
         }
 
         if (worker_pid == 0) {
-            signal(SIGTERM, SIG_DFL);
-            signal(SIGQUIT, SIG_DFL);
-            signal(SIGINT, SIG_DFL);
+            setup_worker_signal_handlers();
             worker_id = i;
             break;
         } else {
@@ -260,9 +269,7 @@ int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_f
                 }
 
                 if (worker_pid == 0) {
-                    signal(SIGTERM, SIG_DFL);
-                    signal(SIGQUIT, SIG_DFL);
-                    signal(SIGINT, SIG_DFL);
+                    setup_worker_signal_handlers();
                     worker_id = i;
                 } else {
                     worker_pids[i] = worker_pid;
