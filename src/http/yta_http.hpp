@@ -20,7 +20,7 @@ char* serve_400(char* buf);
 
 char* serve_404(char* buf);
 
-std::size_t clean_path(char* buf, std::size_t length);
+std::size_t clean_path(const char* buf, std::size_t length, char* const normalized_path);
 
 constexpr const char* http_time_format() {
     return "%a, %d %b %Y %H:%M:%S %Z";

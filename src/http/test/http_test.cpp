@@ -61,10 +61,10 @@ int test_clean_path() {
                                              { "abc/../../././../def", "../../def" } };
 
     for (auto&& test : tests) {
-        auto res_length = yta::http::clean_path(&test.input[0], test.input.size());
+        char buf[512] = { 0 };
+        auto res_length = yta::http::clean_path(&test.input[0], test.input.size(), buf);
         if (res_length != test.output.size() ||
-            !std::equal(test.input.begin(), test.input.begin() + res_length,
-                        test.output.begin())) {
+            !std::equal(buf, buf + res_length, test.output.begin())) {
             std::cerr << "Clean path test failed: input after: " << test.input
                       << " expected: " << test.output << " result length: " << res_length
                       << std::endl;

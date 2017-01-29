@@ -39,6 +39,11 @@ class IntegrationTest(unittest.TestCase):
         self.assertEqual(resp.text, 'foo')
         self.assertEqual(resp.headers['Content-Type'], 'text/html')
 
+        resp = requests.get(base + '/subdir/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.text, 'subdir hello')
+        self.assertEqual(resp.headers['Content-Type'], 'text/html')
+
         sess = requests.session()
 
         resp = sess.get(base + '/hello.html')
@@ -120,6 +125,10 @@ class IntegrationTest(unittest.TestCase):
         # > max buffer size
         resp = requests.get(base + '/hello.html', headers = {'foo': 'A' * 1024})
         self.assertEqual(resp.status_code, 400)
+
+        # long url (under buffer size above max URL size) is 404
+        resp = requests.get(base + '/' + 'a' * 800)
+        self.assertEqual(resp.status_code, 404)
 
         # fuzz
         for _ in range(100):

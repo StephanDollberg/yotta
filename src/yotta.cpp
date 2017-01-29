@@ -15,6 +15,7 @@
 
 #include "picohttpparser/picohttpparser.h"
 
+const std::size_t MAX_URL_SIXE = 512;
 const std::size_t MAX_HEADERS = 20;
 const std::size_t MAX_BUFFER_SIZE = 1024;
 
@@ -75,37 +76,45 @@ std::unordered_map<std::experimental::string_view, std::experimental::string_vie
     { ".mp3", "audio/mpeg"}
 };
 
-int parse_url(yta_ctx* ctx, const char* at, size_t length) {
+int parse_url(yta_ctx* ctx, const char* path, size_t length) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
     // parse query string
-    auto pos = std::find(at, at + length, '?');
-    if (pos != at + length) {
-        length = pos - at;
+    auto pos = std::find(path, path + length, '?');
+    if (pos != path + length) {
+        length = pos - path;
     }
 
-    // clean path buffer is 512, we should probably pass the buf as well
-    if (length > 500) {
+    // clean path buffer is MAX_URL_SICE
+    // leave space for appended index.html
+    if ((length > (MAX_URL_SIXE - 20)) || (length == 0)) {
         return_404(udata);
         return 0;
     }
 
-    // clean path
-    char* path = const_cast<char*>(at); // UB
-    auto new_length = yta::http::clean_path(path, length);
-    *(--path) = '.';
-    ++new_length;
+    char normalized_path[MAX_URL_SIXE] = { 0 };
+    // prepend . for current directory
+    normalized_path[0] = '.';
+    std::size_t new_length = 1;
 
-    // append index.html to ./
-    if (path[new_length - 1] == '/') {
+    // clean path
+    new_length += yta::http::clean_path(path, length, normalized_path + 1);
+
+	// clean_path removes trailing slash except for root;
+    // put the trailing slash back if necessary.
+    if (path[length - 1] == '/' && new_length != 2) {
+        normalized_path[new_length] = '/';
+        ++new_length;
+    }
+
+    // append index.html to urls with trailing slashes
+    if (normalized_path[new_length - 1] == '/') {
         const char index_html[] = "index.html";
-        std::copy(index_html, index_html + 10, path + new_length);
+        std::copy(index_html, index_html + 10, normalized_path + new_length);
         new_length += 10;
     }
 
-    path[new_length] = '\0';
-
-    int ffd = open(path, O_RDONLY);
+    int ffd = open(normalized_path, O_RDONLY);
 
     if (ffd == -1) {
         return_404(udata);
@@ -121,7 +130,7 @@ int parse_url(yta_ctx* ctx, const char* at, size_t length) {
         return 0;
     }
 
-    std::experimental::string_view path_view(path, new_length);
+    std::experimental::string_view path_view(normalized_path, new_length);
     auto path_begin = path_view.rfind('.');
 
     // we always find . at the beginning because of ./FILENAME

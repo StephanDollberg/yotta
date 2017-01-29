@@ -92,12 +92,11 @@ char* serve_404(char* buf) {
 
 // translated from Go source
 // Cleans path from .. etc; returns new path size
-std::size_t clean_path(char* path, std::size_t length) {
-    char temp_buf[512];
-    char* output = temp_buf;
+std::size_t clean_path(const char* path, std::size_t length, char* const normalized_path) {
+    char* output = normalized_path;
 
     if (length == 0) {
-        *path = '.';
+        *output = '.';
         return 1;
     }
 
@@ -119,21 +118,21 @@ std::size_t clean_path(char* path, std::size_t length) {
         } else if (path[r] == '.' && path[r+1] == '.' && (r+2 == length || path[r+2] == '/')) {
             r += 2;
 
-            if (std::size_t(output - temp_buf) > dotdot) {
+            if (std::size_t(output - normalized_path) > dotdot) {
                 --output;
-                while (std::size_t(output - temp_buf) > dotdot && *output != '/') {
+                while (std::size_t(output - normalized_path) > dotdot && *output != '/') {
                     --output;
                 }
             } else if(!rooted) {
-                if (output - temp_buf > 0) {
+                if (output - normalized_path > 0) {
                     *output++ = '/';
                 }
                 *output++ = '.';
                 *output++ = '.';
-                dotdot = output - &temp_buf[0];
+                dotdot = output - &normalized_path[0];
             }
         } else {
-            if ((rooted && (std::size_t(output - temp_buf) != 1)) || (!rooted && (output - temp_buf != 0))) {
+            if ((rooted && (std::size_t(output - normalized_path) != 1)) || (!rooted && (output - normalized_path != 0))) {
                 *output++ = '/';
             }
 
@@ -143,12 +142,11 @@ std::size_t clean_path(char* path, std::size_t length) {
         }
     }
 
-    if (output - temp_buf == 0) {
+    if (output - normalized_path == 0) {
         *output++ = '.';
     }
 
-    std::copy(&temp_buf[0], output, path);
-    return output - &temp_buf[0];
+    return output - normalized_path;
 }
 
 }
