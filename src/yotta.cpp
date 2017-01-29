@@ -233,7 +233,6 @@ std::unordered_map<std::experimental::string_view, header_handler> header_callba
     { "If-Modified-Since", handle_if_modified_since }, { "Range", handle_range }
 };
 
-// TODO: use string_view in more cases here
 int parse_headers(yta_ctx* ctx) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
 
