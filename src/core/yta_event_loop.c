@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <sys/unistd.h>
 #include <sys/signalfd.h>
+#include <pwd.h>
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -574,6 +575,28 @@ int* get_listen_fds(int worker_count, char* addr, char* port) {
     }
 }
 
+void drop_root() {
+    if (getgid() != 0) {
+        return;
+    }
+
+    struct passwd* nobody_user = getpwnam("nobody");
+    if (nobody_user == NULL) {
+        fprintf(stderr, "nobody group not found, continuing as root");
+        return;
+    }
+
+    if (setgid(nobody_user->pw_gid) != 0) {
+        fprintf(stderr, "failed setting nobody group, exiting");
+        exit(1);
+    }
+
+    if (setuid(nobody_user->pw_uid) != 0) {
+        fprintf(stderr, "failed setting nobody group, exiting");
+        exit(1);
+    }
+}
+
 void yta_run(char** argv, char* addr, char* port, char* pidfile_path, int daemonize, yta_callback accept_callback) {
     if (daemonize) {
         yta_daemonize();
@@ -582,6 +605,8 @@ void yta_run(char** argv, char* addr, char* port, char* pidfile_path, int daemon
     const int worker_count = 4;
 
     int* listen_fds = get_listen_fds(worker_count, addr, port);
+
+    drop_root();
 
     int worker_id = yta_fork_workers(worker_count, pidfile_path, argv, listen_fds);
 
