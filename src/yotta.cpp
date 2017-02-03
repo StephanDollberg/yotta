@@ -28,15 +28,15 @@ struct parser_data {
     std::size_t path_len = 0;
     int pret = 0;
     int minor_version = 0;
-    phr_header headers[MAX_HEADERS];
+    std::array<phr_header, MAX_HEADERS> headers;
     std::size_t num_headers = MAX_HEADERS;
 };
 
 struct user_data {
     std::size_t counter;
 
-    char buf[MAX_BUFFER_SIZE];
-    char response_buf[MAX_BUFFER_SIZE];
+    std::array<char, MAX_BUFFER_SIZE> buf;
+    std::array<char, MAX_BUFFER_SIZE> response_buf;
 
     bool finalized;
 
@@ -54,15 +54,15 @@ struct user_data {
 };
 
 void return_400(user_data* udata) {
-    auto ret = yta::http::serve_400(udata->response_buf);
-    udata->response_size = ret - udata->response_buf;
+    auto ret = yta::http::serve_400(udata->response_buf.data());
+    udata->response_size = ret - udata->response_buf.data();
     udata->content = false;
     udata->finalized = true;
 }
 
 void return_404(user_data* udata) {
-    auto ret = yta::http::serve_404(udata->response_buf);
-    udata->response_size = ret - udata->response_buf;
+    auto ret = yta::http::serve_404(udata->response_buf.data());
+    udata->response_size = ret - udata->response_buf.data();
     udata->content = false;
     udata->finalized = true;
 }
@@ -110,7 +110,7 @@ int parse_url(yta_ctx* ctx, const char* path, size_t length) {
     // append index.html to urls with trailing slashes
     if (normalized_path[new_length - 1] == '/') {
         const char index_html[] = "index.html";
-        std::copy(index_html, index_html + 10, normalized_path + new_length);
+        std::copy(std::begin(index_html), std::end(index_html), normalized_path + new_length);
         new_length += 10;
     }
 
@@ -160,8 +160,8 @@ bool handle_if_modified_since(yta_ctx* ctx, std::experimental::string_view value
 
     tm stamp;
     if (strptime(value.data(), yta::http::http_time_format(), &stamp) == NULL) {
-        auto end = yta::http::serve_400(udata->response_buf);
-        udata->response_size = end - udata->response_buf;
+        auto end = yta::http::serve_400(udata->response_buf.data());
+        udata->response_size = end - udata->response_buf.data();
         udata->content = false;
         udata->finalized = true;
         return true;
@@ -170,8 +170,8 @@ bool handle_if_modified_since(yta_ctx* ctx, std::experimental::string_view value
 
     // not modified
     if (time >= udata->file_stat.st_mtime) {
-        auto end = yta::http::serve_304(udata->response_buf);
-        udata->response_size = end - udata->response_buf;
+        auto end = yta::http::serve_304(udata->response_buf.data());
+        udata->response_size = end - udata->response_buf.data();
         udata->content = false;
         udata->finalized = true;
         return true;
@@ -241,10 +241,10 @@ bool handle_range(yta_ctx* ctx, std::experimental::string_view value) {
     udata->file_size = end_value - start_value + 1;
     udata->offset = start_value;
 
-    auto end = yta::http::serve_206(udata->response_buf, udata->file_size,
+    auto end = yta::http::serve_206(udata->response_buf.data(), udata->file_size,
                                     &udata->file_stat.st_mtime, start_value, end_value,
                                     udata->file_stat.st_size);
-    udata->response_size = end - udata->response_buf;
+    udata->response_size = end - udata->response_buf.data();
     udata->content = true;
     udata->finalized = true;
 
@@ -273,9 +273,9 @@ int parse_headers(yta_ctx* ctx) {
     }
 
     if (!udata->finalized) {
-        auto end = yta::http::serve_200(udata->response_buf, udata->file_size,
+        auto end = yta::http::serve_200(udata->response_buf.data(), udata->file_size,
                                         &udata->file_stat.st_mtime, udata->extension);
-        udata->response_size = end - udata->response_buf;
+        udata->response_size = end - udata->response_buf.data();
         udata->content = true;
         udata->finalized = true;
     }
@@ -322,9 +322,9 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
     udata->counter += read;
 
     int parsed = phr_parse_request(
-        udata->buf, udata->counter, &udata->parser.method, &udata->parser.method_len,
+        udata->buf.data(), udata->counter, &udata->parser.method, &udata->parser.method_len,
         &udata->parser.path, &udata->parser.path_len, &udata->parser.minor_version,
-        udata->parser.headers, &udata->parser.num_headers, prev_count);
+        udata->parser.headers.data(), &udata->parser.num_headers, prev_count);
 
     if (parsed == -1) {
         return_400(udata);
@@ -342,7 +342,7 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
             exit(1);
         }
 
-        yta_async_write(ctx, write_header_callback, udata->response_buf,
+        yta_async_write(ctx, write_header_callback, udata->response_buf.data(),
                         udata->response_size);
         return YTA_OK;
     }
@@ -351,7 +351,7 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
         return http_finish_callback(ctx, NULL, 0);
     }
 
-    yta_async_read(ctx, read_callback_http, (byte*)buf + read, MAX_BUFFER_SIZE - udata->counter);
+    yta_async_read(ctx, read_callback_http, (char*)buf + read, MAX_BUFFER_SIZE - udata->counter);
     return YTA_OK;
 }
 
@@ -378,7 +378,7 @@ void accept_logic(yta_ctx* ctx, user_data* udata) {
     udata->counter = 0;
     udata->finalized = false;
     udata->file_fd = 0;
-    yta_async_read(ctx, read_callback_http, udata->buf, MAX_BUFFER_SIZE);
+    yta_async_read(ctx, read_callback_http, udata->buf.data(), MAX_BUFFER_SIZE);
 }
 
 yta_callback_status accept_callback_http(yta_ctx* ctx) {
