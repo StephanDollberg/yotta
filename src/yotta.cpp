@@ -28,7 +28,7 @@ struct parser_data {
     std::size_t path_len = 0;
     int pret = 0;
     int minor_version = 0;
-    struct phr_header headers[MAX_HEADERS];
+    phr_header headers[MAX_HEADERS];
     std::size_t num_headers = MAX_HEADERS;
 };
 
@@ -282,10 +282,10 @@ int parse_headers(yta_ctx* ctx) {
     return 0;
 }
 
-void accept_logic(struct yta_ctx* ctx, struct user_data* udata);
+void accept_logic(yta_ctx* ctx, user_data* udata);
 
-yta_callback_status http_finish_callback(struct yta_ctx* ctx, void*, size_t) {
-    struct user_data* udata = static_cast<user_data*>(ctx->user_data);
+yta_callback_status http_finish_callback(yta_ctx* ctx, void*, size_t) {
+    user_data* udata = static_cast<user_data*>(ctx->user_data);
 
     if (udata->file_fd != 0) {
         close(udata->file_fd);
@@ -355,8 +355,8 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
     return YTA_OK;
 }
 
-yta_callback_status http_cleanup(struct yta_ctx* ctx) {
-    struct user_data* udata = static_cast<struct user_data*>(ctx->user_data);
+yta_callback_status http_cleanup(yta_ctx* ctx) {
+    user_data* udata = static_cast<user_data*>(ctx->user_data);
 
     if (udata->file_fd != 0) {
         close(udata->file_fd);
@@ -373,7 +373,7 @@ yta_callback_status timer_callback(yta_ctx* /* ctx */) {
     return YTA_EXIT;
 }
 
-void accept_logic(yta_ctx* ctx, struct user_data* udata) {
+void accept_logic(yta_ctx* ctx, user_data* udata) {
     udata->parser = parser_data{};
     udata->counter = 0;
     udata->finalized = false;
@@ -381,8 +381,8 @@ void accept_logic(yta_ctx* ctx, struct user_data* udata) {
     yta_async_read(ctx, read_callback_http, udata->buf, MAX_BUFFER_SIZE);
 }
 
-yta_callback_status accept_callback_http(struct yta_ctx* ctx) {
-    struct user_data* udata = new user_data;
+yta_callback_status accept_callback_http(yta_ctx* ctx) {
+    user_data* udata = new user_data;
     if (udata == nullptr) {
         return YTA_EXIT;
     }
