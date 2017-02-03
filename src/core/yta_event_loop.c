@@ -606,9 +606,9 @@ void yta_run(char** argv, char* addr, char* port, char* pidfile_path, int daemon
 
     int* listen_fds = get_listen_fds(worker_count, addr, port);
 
-    drop_root();
-
     int worker_id = yta_fork_workers(worker_count, pidfile_path, argv, listen_fds);
+
+    drop_root();
 
     serve(listen_fds[worker_id], accept_callback);
 
