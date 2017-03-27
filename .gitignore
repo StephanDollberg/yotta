@@ -4,4 +4,6 @@ src/picohttpparser/Jamfile
 src/picohttpparser/README.md
 src/picohttpparser/bench.c
 src/picohttpparser/test.c
+*.pyc
+build/
 
