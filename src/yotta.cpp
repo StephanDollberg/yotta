@@ -14,6 +14,7 @@
 #include "http/yta_http.hpp"
 
 #include "picohttpparser/picohttpparser.h"
+#include "args.h"
 
 const std::size_t MAX_URL_SIXE = 512;
 const std::size_t MAX_HEADERS = 20;
@@ -395,25 +396,9 @@ yta_callback_status accept_callback_http(yta_ctx* ctx) {
 
 
 int main(int argc, char** argv) {
-    if (argc < 3) {
-        fprintf(stderr, "Usage: %s addr port\n", argv[0]);
-        exit(1);
-    }
+    auto opts = get_program_opts(argc, argv);
 
-    char default_pidfile[] =  { "/tmp/yotta.pid" };
-    char* pidfile_path = default_pidfile;
-    int daemonize = 0;
-
-    if (argc == 4) {
-        pidfile_path = argv[3];
-    }
-
-    if (argc == 5) {
-        pidfile_path = argv[3];
-        daemonize = atoi(argv[4]);
-    }
-
-    yta_run(argv, argv[1], argv[2], pidfile_path, daemonize, accept_callback_http);
+    yta_run(argv, opts.host.c_str(), opts.port.c_str(), opts.pid_file.c_str(), opts.daemonize, accept_callback_http);
 
     return 0;
 }

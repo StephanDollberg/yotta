@@ -49,7 +49,7 @@ enum yta_loop_status { YTA_LOOP_CONTINUE, YTA_LOOP_AGAIN , YTA_LOOP_ERROR };
 // some of util functions based on
 // https://banu.com/blog/2/how-to-use-epoll-a-complete-example-in-c/
 
-static int make_listen_socket(char* addr, char* port) {
+static int make_listen_socket(const char* addr, const char* port) {
     struct addrinfo hint;
     struct addrinfo* res;
     int ret;
@@ -546,7 +546,7 @@ void yta_set_close_callback(struct yta_ctx* ctx, yta_callback callback) {
     ctx->close_callback = callback;
 }
 
-int* get_listen_fds(int worker_count, char* addr, char* port) {
+int* get_listen_fds(int worker_count, const char* addr, const char* port) {
     char* listen_fds_env = getenv("listen_fds");
 
     if (listen_fds_env == NULL) {
@@ -597,7 +597,7 @@ void drop_root() {
     }
 }
 
-void yta_run(char** argv, char* addr, char* port, char* pidfile_path, int daemonize, yta_callback accept_callback) {
+void yta_run(char** argv, const char* addr, const char* port, const char* pidfile_path, int daemonize, yta_callback accept_callback) {
     if (daemonize) {
         yta_daemonize();
     }

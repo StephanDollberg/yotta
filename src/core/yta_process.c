@@ -13,7 +13,7 @@
 
 pid_t* worker_pids = NULL;
 sig_atomic_t worker_count = 0;
-char* pidfile_to_delete = NULL;
+const char* pidfile_to_delete = NULL;
 char** stored_argv = NULL;
 int* stored_listen_fds = NULL;
 int upgraded = 0;
@@ -86,7 +86,7 @@ void exit_and_cleanup_main(int signo) {
     remove(pidfile_to_delete);
 
     if (upgraded) {
-        free(pidfile_to_delete);
+        free((void*)pidfile_to_delete);
     }
 
     if (signo == SIGQUIT) {
@@ -153,7 +153,7 @@ void upgrade_handler(int signo) {
     free(buf);
 }
 
-void write_pidfile(char* pidfile_path) {
+void write_pidfile(const char* pidfile_path) {
     FILE* pidfile = fopen(pidfile_path, "w");
     if (pidfile == NULL) {
         fprintf(stderr, "can't open pidfile");
@@ -209,7 +209,7 @@ void setup_worker_signal_handlers() {
     signal(SIGUSR1, upgrade_handler);
 }
 
-int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_fds) {
+int yta_fork_workers(int workers, const char* pidfile_path, char** argv, int* listen_fds) {
     clear_sigmask();
     setup_master_signal_handlers();
 

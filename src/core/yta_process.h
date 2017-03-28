@@ -8,7 +8,7 @@ extern "C" {
 
 void signal_handler(int /* signo */);
 
-int yta_fork_workers(int workers, char* pidfile_path, char** argv, int* listen_fds);
+int yta_fork_workers(int workers, const char* pidfile_path, char** argv, int* listen_fds);
 
 char* create_listen_fds_env(int* listen_fd, int worker_count);
 int* parse_listen_fds_env(char* listen_fds_env, int fd_count);
