@@ -1,8 +1,8 @@
 cmake_minimum_required (VERSION 2.6)
 project (yotta)
 
-set (CMAKE_CXX_FLAGS "--std=c++1y -Wall -Werror -Wextra -pedantic -g -O3 -fsanitize=address -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fpie -pie -Wl,-z,relro,-z,now")
-set (CMAKE_C_FLAGS "--std=gnu11 -g -O3 -Wall -Werror -Wextra -pedantic -fsanitize=address -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fpic -Wl,-z,relro,-z,now")
+set (CMAKE_CXX_FLAGS "--std=c++1y -Wall -Werror -Wextra -pedantic -g -O3 -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fpie -pie -Wl,-z,relro,-z,now")
+set (CMAKE_C_FLAGS "--std=gnu11 -g -O3 -Wall -Werror -Wextra -pedantic -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fpic -Wl,-z,relro,-z,now")
 
 add_subdirectory(core)
 add_subdirectory(http)
