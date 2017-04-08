@@ -3,6 +3,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <boost/pool/object_pool.hpp>
+
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
@@ -53,6 +55,8 @@ struct user_data {
 
     struct stat file_stat;
 };
+
+boost::object_pool<user_data> pool;
 
 void return_400(user_data* udata) {
     auto ret = yta::http::serve_400(udata->response_buf.data());
@@ -364,7 +368,7 @@ yta_callback_status http_cleanup(yta_ctx* ctx) {
         udata->file_fd = 0;
     }
 
-    delete udata;
+    pool.destroy(udata);
 
     return YTA_EXIT;
 }
@@ -383,7 +387,7 @@ void accept_logic(yta_ctx* ctx, user_data* udata) {
 }
 
 yta_callback_status accept_callback_http(yta_ctx* ctx) {
-    user_data* udata = new user_data;
+    user_data* udata = pool.construct();
     if (udata == nullptr) {
         return YTA_EXIT;
     }
