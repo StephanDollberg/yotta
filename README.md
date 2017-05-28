@@ -32,9 +32,11 @@ Will build you the `yotta` binary.
 
 Run the binary in the directory you want to serve, you shall pass the address and port to listen on:
 
-    yotta :: 10000
+    yotta -h :: -p 10000
     
 To listen on all interfaces and port `10000`.
+
+See `upgrade_yotta.sh` and `yotta.unit` for usage of the pid file (`-i`) option, daemonizing (`-g`) option and how to upgrade.
 
 ### Tests
 
