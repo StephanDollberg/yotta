@@ -74,7 +74,7 @@ void yta_async_timer(struct yta_ctx* ctx, yta_callback callback, int timeout_sec
 void yta_set_close_callback(struct yta_ctx* ctx, yta_callback callback);
 
 
-void yta_run(char** argv, const char* addr, const char* port, const char* pidfile_path, int daemonize, yta_callback callback);
+void yta_run(char** argv, const char* addr, const char* port, const char* pidfile_path, int daemonize, int worker_count, yta_callback callback);
 
 #ifdef __cplusplus
 }

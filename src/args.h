@@ -9,13 +9,14 @@ struct argument_options {
     std::string pid_file = "/tmp/yotta.pid";
     std::string port = "0";
     std::string host = "::";
+    int workers = 4;
 };
 
 
 inline argument_options get_program_opts(int argc, char** argv) {
     argument_options options;
     int opt = 0;
-    while ((opt = getopt(argc, argv, "gi:p:h:")) != -1) {
+    while ((opt = getopt(argc, argv, "gi:p:h:w:")) != -1) {
         switch (opt) {
             case 'g': {
                 std::cout << "Daemonizing turned on" << std::endl;
@@ -35,6 +36,11 @@ inline argument_options get_program_opts(int argc, char** argv) {
             case 'h': {
                 std::cout << "Listening on host: " << optarg << std::endl;
                 options.host = optarg;
+                break;
+            }
+            case 'w': {
+                std::cout << "Spawning " << optarg << " workers" << std::endl;
+                options.workers = std::atoi(optarg);
                 break;
             }
             case '?':  { // unknown option... {

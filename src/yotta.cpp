@@ -398,7 +398,7 @@ yta_callback_status accept_callback_http(yta_ctx* ctx) {
 int main(int argc, char** argv) {
     auto opts = get_program_opts(argc, argv);
 
-    yta_run(argv, opts.host.c_str(), opts.port.c_str(), opts.pid_file.c_str(), opts.daemonize, accept_callback_http);
+    yta_run(argv, opts.host.c_str(), opts.port.c_str(), opts.pid_file.c_str(), opts.daemonize, opts.workers, accept_callback_http);
 
     return 0;
 }
