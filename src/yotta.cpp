@@ -13,8 +13,8 @@
 #include "core/yta_event_loop.h"
 #include "http/yta_http.hpp"
 
-#include "picohttpparser/picohttpparser.h"
 #include "args.h"
+#include "picohttpparser/picohttpparser.h"
 
 const std::size_t MAX_URL_SIXE = 512;
 const std::size_t MAX_HEADERS = 20;
@@ -68,14 +68,24 @@ void return_404(user_data* udata) {
     udata->finalized = true;
 }
 
-std::unordered_map<std::experimental::string_view, std::experimental::string_view> mime_types {
-    { ".html", "text/html" }, { ".css", "text/css" }, { ".png", "image/png"}, { ".jpg", "image/jpeg" },
-    { ".jpeg", "image/jpeg"}, { ".txt", "text/plain" }, {".js", "application/x-javascript"},
-    { ".json", "application/json"}, { ".pdf", "application/pdf" }, { ".zip", "application/zip" },
-    { ".woff", "application/font-woff" }, { ".woff2", "application/font-woff2" },
-    { ".opus", "audio/opus"}, { ".mp4", "video/mp4"}, { ".mpeg", "video/mpeg" }, { ".mpg", "video/mpeg" },
-    { ".mp3", "audio/mpeg"}
-};
+std::unordered_map<std::experimental::string_view, std::experimental::string_view>
+    mime_types{ { ".html", "text/html" },
+                { ".css", "text/css" },
+                { ".png", "image/png" },
+                { ".jpg", "image/jpeg" },
+                { ".jpeg", "image/jpeg" },
+                { ".txt", "text/plain" },
+                { ".js", "application/x-javascript" },
+                { ".json", "application/json" },
+                { ".pdf", "application/pdf" },
+                { ".zip", "application/zip" },
+                { ".woff", "application/font-woff" },
+                { ".woff2", "application/font-woff2" },
+                { ".opus", "audio/opus" },
+                { ".mp4", "video/mp4" },
+                { ".mpeg", "video/mpeg" },
+                { ".mpg", "video/mpeg" },
+                { ".mp3", "audio/mpeg" } };
 
 int parse_url(yta_ctx* ctx, const char* path, size_t length) {
     user_data* udata = static_cast<user_data*>(ctx->user_data);
@@ -101,7 +111,7 @@ int parse_url(yta_ctx* ctx, const char* path, size_t length) {
     // clean path
     new_length += yta::http::clean_path(path, length, normalized_path + 1);
 
-	// clean_path removes trailing slash except for root;
+    // clean_path removes trailing slash except for root;
     // put the trailing slash back if necessary.
     if (path[length - 1] == '/' && new_length != 2) {
         normalized_path[new_length] = '/';
@@ -111,7 +121,8 @@ int parse_url(yta_ctx* ctx, const char* path, size_t length) {
     // append index.html to urls with trailing slashes
     if (normalized_path[new_length - 1] == '/') {
         const char index_html[] = "index.html";
-        std::copy(std::begin(index_html), std::end(index_html), normalized_path + new_length);
+        std::copy(std::begin(index_html), std::end(index_html),
+                  normalized_path + new_length);
         new_length += 10;
     }
 
@@ -265,7 +276,7 @@ int parse_headers(yta_ctx* ctx) {
         auto it = header_callbacks.find(header);
         if (it != header_callbacks.end()) {
             std::experimental::string_view value(udata->parser.headers[i].value,
-                                                  udata->parser.headers[i].value_len);
+                                                 udata->parser.headers[i].value_len);
             auto done = it->second(ctx, value);
             if (done) {
                 return 0;
@@ -295,8 +306,7 @@ yta_callback_status http_finish_callback(yta_ctx* ctx, void*, size_t) {
 
     // uncork
     int enable = 0;
-    if (setsockopt(ctx->fd, IPPROTO_TCP, TCP_CORK, &enable, sizeof(enable)) <
-        0) {
+    if (setsockopt(ctx->fd, IPPROTO_TCP, TCP_CORK, &enable, sizeof(enable)) < 0) {
         fprintf(stderr, "error setting TCP_CORK");
         exit(1);
     }
@@ -323,9 +333,10 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
     udata->counter += read;
 
     int parsed = phr_parse_request(
-        udata->buf.data(), udata->counter, &udata->parser.method, &udata->parser.method_len,
-        &udata->parser.path, &udata->parser.path_len, &udata->parser.minor_version,
-        udata->parser.headers.data(), &udata->parser.num_headers, prev_count);
+        udata->buf.data(), udata->counter, &udata->parser.method,
+        &udata->parser.method_len, &udata->parser.path, &udata->parser.path_len,
+        &udata->parser.minor_version, udata->parser.headers.data(),
+        &udata->parser.num_headers, prev_count);
 
     if (parsed == -1) {
         return_400(udata);
@@ -337,8 +348,7 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
     if (udata->finalized) {
         // cork
         int enable = 1;
-        if (setsockopt(ctx->fd, IPPROTO_TCP, TCP_CORK, &enable, sizeof(enable)) <
-            0) {
+        if (setsockopt(ctx->fd, IPPROTO_TCP, TCP_CORK, &enable, sizeof(enable)) < 0) {
             fprintf(stderr, "error setting TCP_CORK");
             exit(1);
         }
@@ -352,7 +362,8 @@ yta_callback_status read_callback_http(yta_ctx* ctx, void* buf, size_t read) {
         return http_finish_callback(ctx, NULL, 0);
     }
 
-    yta_async_read(ctx, read_callback_http, (char*)buf + read, MAX_BUFFER_SIZE - udata->counter);
+    yta_async_read(ctx, read_callback_http, (char*)buf + read,
+                   MAX_BUFFER_SIZE - udata->counter);
     return YTA_OK;
 }
 
@@ -394,11 +405,11 @@ yta_callback_status accept_callback_http(yta_ctx* ctx) {
     return YTA_OK;
 }
 
-
 int main(int argc, char** argv) {
     auto opts = get_program_opts(argc, argv);
 
-    yta_run(argv, opts.host.c_str(), opts.port.c_str(), opts.pid_file.c_str(), opts.daemonize, opts.workers, accept_callback_http);
+    yta_run(argv, opts.host.c_str(), opts.port.c_str(), opts.pid_file.c_str(),
+            opts.daemonize, opts.workers, accept_callback_http);
 
     return 0;
 }

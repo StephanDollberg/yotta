@@ -5,8 +5,8 @@
 #include <sys/unistd.h>
 #include <sys/wait.h>
 
-#include <unistd.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -142,7 +142,7 @@ void upgrade_handler(int signo) {
     }
 
     if (pid == 0) {
-        int status = execve(stored_argv[0], stored_argv, envp );
+        int status = execve(stored_argv[0], stored_argv, envp);
 
         if (status == -1) {
             perror("Failed to execve");
@@ -209,7 +209,8 @@ void setup_worker_signal_handlers() {
     signal(SIGUSR1, upgrade_handler);
 }
 
-int yta_fork_workers(int workers, const char* pidfile_path, char** argv, int* listen_fds) {
+int yta_fork_workers(int workers, const char* pidfile_path, char** argv,
+                     int* listen_fds) {
     clear_sigmask();
     setup_master_signal_handlers();
 
@@ -287,15 +288,13 @@ void yta_daemonize() {
     pid_t pid = fork();
 
     switch (pid) {
-        case 0: {
-            break;
-        }
-        case -1: {
-            fprintf(stderr, "failed daemonizing, exiting");
-        }
-        default: {
-            exit(0);
-        }
+    case 0: {
+        break;
+    }
+    case -1: {
+        fprintf(stderr, "failed daemonizing, exiting");
+    }
+    default: { exit(0); }
     }
 
     if (setsid() == -1) {

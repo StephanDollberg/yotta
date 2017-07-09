@@ -10,16 +10,16 @@
 
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <pwd.h>
 #include <sys/epoll.h>
 #include <sys/prctl.h>
 #include <sys/sendfile.h>
+#include <sys/signalfd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/timerfd.h>
 #include <sys/types.h>
 #include <sys/unistd.h>
-#include <sys/signalfd.h>
-#include <pwd.h>
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -44,7 +44,7 @@ struct loop_core {
     int current_clients;
 };
 
-enum yta_loop_status { YTA_LOOP_CONTINUE, YTA_LOOP_AGAIN , YTA_LOOP_ERROR };
+enum yta_loop_status { YTA_LOOP_CONTINUE, YTA_LOOP_AGAIN, YTA_LOOP_ERROR };
 
 // some of util functions based on
 // https://banu.com/blog/2/how-to-use-epoll-a-complete-example-in-c/
@@ -91,7 +91,7 @@ static int make_listen_socket(const char* addr, const char* port) {
         struct addrinfo* next = res->ai_next;
         free(res);
         res = next;
-    } while(res);
+    } while (res);
 
     return listen_fd;
 }
@@ -148,7 +148,7 @@ static struct loop_core create_reactor(int listen_fd) {
     listen_event.data.ptr = reactor.listen_fd_ctx;
     reactor.listen_fd_ctx->fd = reactor.listen_fd;
     int status = epoll_ctl(reactor.socket_epoll_fd, EPOLL_CTL_ADD, reactor.listen_fd,
-                       &listen_event);
+                           &listen_event);
     if (status == -1) {
         perror("error adding listen_fd to epoll set");
         exit(1);
@@ -214,7 +214,8 @@ static struct loop_core create_reactor(int listen_fd) {
     struct epoll_event signal_event;
     signal_event.data.fd = reactor.signal_fd;
     signal_event.events = EPOLLIN | EPOLLET;
-    status = epoll_ctl(reactor.master_epoll_fd, EPOLL_CTL_ADD, reactor.signal_fd, &signal_event);
+    status = epoll_ctl(reactor.master_epoll_fd, EPOLL_CTL_ADD, reactor.signal_fd,
+                       &signal_event);
     if (status == -1) {
         perror("error adding signal fd to epoll set");
         exit(1);
@@ -224,7 +225,7 @@ static struct loop_core create_reactor(int listen_fd) {
 }
 
 static void accept_loop(struct loop_core* reactor, yta_callback accept_callback,
-                               pid_t worker_pid) {
+                        pid_t worker_pid) {
     while (1) {
         struct sockaddr in_addr;
         socklen_t in_len;
@@ -379,7 +380,7 @@ static int write_loop(struct yta_ctx* udata) {
 }
 
 static void serve_timers(struct loop_core* reactor, struct epoll_event* events,
-                                const int MAX_EVENT_COUNT) {
+                         const int MAX_EVENT_COUNT) {
     int event_count = epoll_wait(reactor->timer_epoll_fd, events, MAX_EVENT_COUNT, -1);
 
     for (int i = 0; i < event_count; i++) {
@@ -409,8 +410,7 @@ static void serve_timers(struct loop_core* reactor, struct epoll_event* events,
 }
 
 static void serve_sockets(struct loop_core* reactor, struct epoll_event* events,
-                                 const int MAX_EVENT_COUNT,
-                                 yta_callback accept_callback) {
+                          const int MAX_EVENT_COUNT, yta_callback accept_callback) {
     int event_count = epoll_wait(reactor->socket_epoll_fd, events, MAX_EVENT_COUNT, -1);
 
     for (int i = 0; i < event_count; i++) {
@@ -597,7 +597,8 @@ void drop_root() {
     }
 }
 
-void yta_run(char** argv, const char* addr, const char* port, const char* pidfile_path, int daemonize, int worker_count, yta_callback accept_callback) {
+void yta_run(char** argv, const char* addr, const char* port, const char* pidfile_path,
+             int daemonize, int worker_count, yta_callback accept_callback) {
     if (daemonize) {
         yta_daemonize();
     }
