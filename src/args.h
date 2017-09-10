@@ -7,7 +7,7 @@
 struct argument_options {
     bool daemonize = false;
     std::string pid_file = "/tmp/yotta.pid";
-    std::string port = "0";
+    std::string port = "8080";
     std::string host = "::";
     int workers = 4;
 };
