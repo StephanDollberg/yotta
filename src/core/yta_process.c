@@ -293,6 +293,7 @@ void yta_daemonize() {
     }
     case -1: {
         fprintf(stderr, "failed daemonizing, exiting");
+        exit(1);
     }
     default: { exit(0); }
     }
