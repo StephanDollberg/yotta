@@ -74,6 +74,7 @@ std::unordered_map<std::experimental::string_view, std::experimental::string_vie
                 { ".png", "image/png" },
                 { ".jpg", "image/jpeg" },
                 { ".jpeg", "image/jpeg" },
+                { ".svg", "image/svg+xml" },
                 { ".txt", "text/plain" },
                 { ".js", "application/x-javascript" },
                 { ".json", "application/json" },
