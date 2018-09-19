@@ -80,6 +80,7 @@ std::unordered_map<std::experimental::string_view, std::experimental::string_vie
                 { ".json", "application/json" },
                 { ".pdf", "application/pdf" },
                 { ".zip", "application/zip" },
+                { ".gz", "application/gzip" },
                 { ".woff", "application/font-woff" },
                 { ".woff2", "application/font-woff2" },
                 { ".opus", "audio/opus" },
