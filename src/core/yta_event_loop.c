@@ -263,7 +263,7 @@ static void accept_loop(struct loop_core* reactor, yta_callback accept_callback,
         if (udata == NULL) {
             fprintf(stderr, "failed to allocate mem for context, continueing");
             close(infd);
-            continue;
+            exit(1);
         }
         udata->fd = infd;
         udata->reactor = reactor;
@@ -271,6 +271,7 @@ static void accept_loop(struct loop_core* reactor, yta_callback accept_callback,
         yta_callback_status callback_status = accept_callback(udata);
         if (callback_status == YTA_EXIT) {
             free(udata);
+            close(infd);
             continue;
         }
 
