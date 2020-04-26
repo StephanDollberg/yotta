@@ -42,6 +42,7 @@ struct loop_core {
     int master_epoll_fd;
 
     int current_clients;
+    int terminated;
 };
 
 enum yta_loop_status { YTA_LOOP_CONTINUE, YTA_LOOP_AGAIN, YTA_LOOP_ERROR };
@@ -129,6 +130,7 @@ static void cleanup_context(struct loop_core* reactor, struct yta_ctx* ctx) {
 static struct loop_core create_reactor(int listen_fd) {
     struct loop_core reactor;
     reactor.current_clients = 0;
+    reactor.terminated = 0;
 
     reactor.listen_fd = listen_fd;
 
@@ -428,7 +430,7 @@ static void serve_sockets(struct loop_core* reactor, struct epoll_event* events,
             }
 
             cleanup_context(reactor, udata);
-        } else if (reactor->listen_fd == udata->fd) {
+        } else if (!reactor->terminated && reactor->listen_fd == udata->fd) {
             accept_loop(reactor, accept_callback, getpid());
         } else {
             enum yta_loop_status status = 0;
@@ -457,9 +459,7 @@ static void serve(int listen_fd, yta_callback accept_callback) {
 
     struct epoll_event master_event;
 
-    int terminated = 0;
-
-    while (!terminated || reactor.current_clients) {
+    while (!reactor.terminated || reactor.current_clients) {
         // we only extract a single event as the socket and timer events can
         // influence
         // each other (remove fds from the other epoll set)
@@ -472,7 +472,8 @@ static void serve(int listen_fd, yta_callback accept_callback) {
             serve_timers(&reactor, events, MAX_EVENT_COUNT);
         } else if (master_event.data.fd == reactor.signal_fd) {
             printf("Worker ordered to terminate");
-            terminated = 1;
+            epoll_ctl(reactor.socket_epoll_fd, EPOLL_CTL_DEL, reactor.listen_fd, NULL);
+            reactor.terminated = 1;
             free(reactor.listen_fd_ctx);
         }
     }
