@@ -123,7 +123,7 @@ class IntegrationTest(unittest.TestCase):
         self.assertEqual(resp.headers['Content-Length'], '2')
 
         # > max buffer size
-        resp = requests.get(base + '/hello.html', headers = {'foo': 'A' * 1024})
+        resp = requests.get(base + '/hello.html', headers = {'foo': 'A' * 2048})
         self.assertEqual(resp.status_code, 400)
 
         # long url (under buffer size above max URL size) is 404
