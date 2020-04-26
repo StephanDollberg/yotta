@@ -7,3 +7,7 @@ src/picohttpparser/test.c
 *.pyc
 build/
 
+# intellij crap
+.idea/
+cmake-build-debug/
+
